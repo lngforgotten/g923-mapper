@@ -1,8 +1,19 @@
 # G923 Mapper
 
+Makes a Logitech G923 racing wheel (Xbox/PC edition, and PlayStation edition after a quick calibration) work in games as a virtual Xbox 360 or DualShock 4 controller, with profiles, a clickable controller picture, keyboard and mouse output, force feedback settings and more. Windows 10/11.
+
+## Download (the easy way)
+
+1. Go to the [Releases page](https://github.com/lngforgotten/g923-mapper/releases/latest) and download `G923Mapper-win-x64.zip` (about 67 MB, nothing else to install). A smaller `G923Mapper-small-win-x64.zip` also exists, but it needs the .NET 10 Desktop Runtime.
+2. Unzip it and double-click **`Setup.cmd`**. It installs the app and offers to install the ViGEmBus driver if it is missing (needed once).
+3. Start G923 Mapper from the Start menu. The Setup assistant (More, Setup assistant) walks through the rest, including Calibrate for your wheel.
+
+Windows may show a SmartScreen warning because the app is not code-signed: choose More info, then Run anyway. Source code and tests are all in this repository, under the MIT licence.
+
+
 See `G923-MAPPER-SPEC.md` for the full spec and `WHEEL-LAYOUT.md` for what was observed on the real wheel.
 
-## Install
+## Build and install from source
 
 ```powershell
 .\build\publish.ps1          # builds dist\ : G923Mapper.exe (self-contained, no .NET install needed) plus the setup files
@@ -90,7 +101,7 @@ The app is meant to work with the Xbox/PC G923 (built in, USB id 046D:C26E) and 
 - **Vibration style.** Settings, Force feedback: smooth (a hum, the default), sharp (a buzz) or rough (a rattle). Changing it reconnects the wheel.
 - **Second virtual controller.** A profile with `"outputs": { "secondPad": true }` shows the game two controllers; rules whose output starts with `P2:` (`P2:RightTrigger`, `P2:Button:A`) feed the second one, for example the pedals on a controller of their own. The Controller view on Home shows the first controller only.
 - **Game gallery.** New profile also lists ready-made profiles for specific games (only ones checked by someone who plays them): currently Wardogs lean, which claims the game and uses keyboard output, so it is a Standard profile.
-- **Update check.** Settings, About: enter a GitHub repository (`owner/name`) and press Check for updates. One request, only when you press it; empty by default and never automatic.
+- **Update check.** Settings, About: press Check for updates to ask GitHub whether a newer release exists (the repository is `lngforgotten/g923-mapper` by default and can be changed). One request, only when you press it; never automatic.
 - **Get started checklist.** The first time the app runs it opens a checklist (driver, wheel, calibration, profile, then optional hiding and a test) whose rows tick themselves as you do each step. It is also under More, Setup assistant on the Home tab, and doubles as a quick check that everything is in place.
 - **Hide the wheel per profile.** A profile can say `"hideWheel": true` (hide the real wheel from games while its game is running, and give it back when it ends; choosing or remembering the profile by hand never hides anything) or `false` (make sure it is visible); set it under Wheel in the rule editor. Needs HidHide. Each change asks for administrator permission, only happens when the profile becomes active, and a declined prompt is not repeated.
 - **Per-profile feel.** A profile can set its own rumble strength, centring spring and rumble motors (`"force": { "rumble": 60, "spring": 20, "motors": "heavy" }`, or Feel in the rule editor), laid over the Settings values while it is in use. Whether force feedback is on at all stays a Settings choice.

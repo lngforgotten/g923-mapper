@@ -40,7 +40,7 @@ public sealed class AppSettings
     /// A GitHub repository ("owner/name") whose releases to compare with, when the user presses Check for updates. Empty (the default) means the
     /// app never contacts anything. It is never checked automatically.
     /// </summary>
-    public string UpdateRepo { get; set; } = "";
+    public string UpdateRepo { get; set; } = "lngforgotten/g923-mapper";
     /// <summary>The user has finished (or dismissed for good) the "Get started" checklist.</summary>
     public bool SetupDone { get; set; }
     /// <summary>True when there was no settings file yet, so this is the first time the app has run for this user. Not stored.</summary>
