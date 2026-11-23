@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/G923Mapper.App/G923Mapper.App.csproj" />
+    <Project Path="src/G923Mapper.Core/G923Mapper.Core.csproj" />
+    <Project Path="src/G923Mapper.Passthrough/G923Mapper.Passthrough.csproj" />
+    <Project Path="src/G923Mapper.Probe/G923Mapper.Probe.csproj" />
+    <Project Path="src/G923Mapper.Runtime/G923Mapper.Runtime.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/G923Mapper.Tests/G923Mapper.Tests.csproj" />
+  </Folder>
+</Solution>

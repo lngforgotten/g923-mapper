@@ -1,0 +1,15 @@
+{
+  "name": "GTA V",
+  "match": { "exe": ["GTA5.exe", "GTA5_Enhanced.exe"] },
+  "device": "g923_xbox",
+  "safety": "strict",
+  "outputs": { "keyboard": false },
+  "rules": [
+    { "from": "wheel", "to": "LeftStickX", "curve": "linear", "deadzone": 0.04, "antiDeadzone": 0.06, "range": 270 },
+    { "from": "throttle", "to": "RightTrigger", "curve": "linear" },
+    { "from": "brake", "to": "LeftTrigger", "curve": "linear" },
+    { "from": "clutch", "to": "Button:RightThumb", "curve": "linear", "threshold": 0.5 },
+    { "from": "paddleR", "to": "Button:RightShoulder", "curve": "linear" },
+    { "from": "paddleL", "to": "Button:LeftShoulder", "curve": "linear" }
+  ]
+}

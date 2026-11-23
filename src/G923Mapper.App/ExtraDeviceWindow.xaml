@@ -1,0 +1,59 @@
+<Window x:Class="G923Mapper.App.ExtraDeviceWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Add a device" Width="780" Height="720" MinWidth="680" MinHeight="560"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource WindowBack}" FontFamily="Segoe UI" FontSize="13"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <Border Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="Add a device" FontSize="17" FontWeight="SemiBold" />
+                <TextBlock Style="{StaticResource Muted}" Margin="0,4,0,12"
+                           Text="Choose the device, give it a short name, then move or press its controls. Only what you move shows up below." />
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" /><ColumnDefinition Width="170" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="Device" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <ComboBox x:Name="DeviceBox" Grid.Column="1" SelectionChanged="DeviceBox_SelectionChanged" Margin="0,0,16,0" />
+                    <TextBlock Grid.Column="2" Text="Name" VerticalAlignment="Center" Margin="0,0,10,0" />
+                    <TextBox x:Name="NameBox" Grid.Column="3" Padding="6,5" VerticalContentAlignment="Center" TextChanged="Anything_Changed"
+                             ToolTip="A short word such as handbrake or shifter. Its inputs become handbrake.pull, shifter.button3 and so on." />
+                </Grid>
+            </StackPanel>
+        </Border>
+
+        <Border Grid.Row="2" Style="{StaticResource Card}">
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <StackPanel Margin="0,0,10,0">
+                    <TextBlock x:Name="WakeHint" Style="{StaticResource Muted}" Margin="0,0,0,12" />
+
+                    <TextBlock Text="AXES" Style="{StaticResource Caption}" />
+                    <TextBlock x:Name="AxesEmpty" Style="{StaticResource Muted}" Text="Move a lever, pedal or wheel on the device and it appears here." Margin="0,0,0,14" />
+                    <StackPanel x:Name="AxisPanel" />
+
+                    <TextBlock Text="BUTTONS" Style="{StaticResource Caption}" Margin="0,16,0,10" />
+                    <TextBlock x:Name="ButtonsEmpty" Style="{StaticResource Muted}" Text="This device has no buttons." Visibility="Collapsed" />
+                    <WrapPanel x:Name="ButtonPanel" />
+                </StackPanel>
+            </ScrollViewer>
+        </Border>
+
+        <DockPanel Grid.Row="4">
+            <TextBlock x:Name="Message" DockPanel.Dock="Left" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="2,0,16,0" />
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="Cancel" Style="{StaticResource Secondary}" Margin="0,0,8,0" IsCancel="True" Click="Cancel_Click" />
+                <Button x:Name="SaveButton" Content="Save" Style="{StaticResource Primary}" MinWidth="100" Click="Save_Click" />
+            </StackPanel>
+        </DockPanel>
+    </Grid>
+</Window>

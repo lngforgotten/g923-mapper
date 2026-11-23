@@ -1,0 +1,195 @@
+<Window x:Class="G923Mapper.App.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:G923Mapper.App"
+        Title="G923 Mapper" Width="940" Height="780" MinWidth="820" MinHeight="680"
+        Background="{DynamicResource WindowBack}" FontFamily="Segoe UI" FontSize="13"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="16" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Status -->
+        <Border Style="{StaticResource Card}" Padding="18,14">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Ellipse x:Name="StatusDot" Width="14" Height="14" Fill="{DynamicResource Neutral}" VerticalAlignment="Top" Margin="0,5,12,0" />
+                <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                    <TextBlock x:Name="StatusTitle" FontSize="17" FontWeight="SemiBold" Text="Starting…" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="StatusDetail" Style="{StaticResource Muted}" Margin="0,2,0,0" />
+                </StackPanel>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="HealthButton" Style="{StaticResource Secondary}" Margin="0,0,8,0" Padding="12,8" Click="Health_Click"
+                            AutomationProperties.Name="Health check"
+                            ToolTip="Check that everything the app needs is in place" />
+                    <Button x:Name="SettingsButton" Content="Settings" Style="{StaticResource Secondary}" Margin="0,0,8,0" Padding="14,8" Click="Settings_Click" />
+                    <Button x:Name="ToggleButton" Style="{StaticResource Primary}" Content="Stop" MinWidth="84" Click="ToggleButton_Click" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Body: tabs -->
+        <TabControl x:Name="Tabs" Grid.Row="2" Background="Transparent" BorderThickness="0" Padding="0">
+
+            <!-- ============================ Home ============================ -->
+            <TabItem Header="Home">
+                <Grid Margin="0,12,0,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="310" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <!-- Profile -->
+                    <Border Style="{StaticResource Card}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" Margin="0,14,0,0">
+                                <Button x:Name="EditRulesButton" Content="Edit rules…" Style="{StaticResource Primary}" Padding="16,8" Margin="0,0,8,0" Click="EditRules_Click" />
+                                <Button x:Name="MoreButton" Content="More ▾" Style="{StaticResource Secondary}" Padding="14,8" Click="More_Click" />
+                            </StackPanel>
+                            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                                <StackPanel>
+                                    <TextBlock Text="PROFILE" Style="{StaticResource Caption}" />
+                                    <ComboBox x:Name="ProfileBox" SelectionChanged="ProfileBox_SelectionChanged" />
+                                    <TextBlock x:Name="ProfileInfo" Style="{StaticResource Muted}" Margin="0,10,0,0" />
+                                    <ItemsControl x:Name="IssueList" Margin="0,8,0,0">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate>
+                                                <TextBlock Text="{Binding Text}" Foreground="{Binding Brush}" TextWrapping="Wrap" Margin="0,0,0,6" />
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                    <CheckBox x:Name="AutoSwitchBox" Content="Switch automatically when a game starts" Margin="0,14,0,0"
+                                              Checked="AutoSwitchBox_Changed" Unchecked="AutoSwitchBox_Changed" />
+                                    <CheckBox x:Name="FocusModeBox" Content="Only while the game window is in front" Margin="22,6,0,0"
+                                              ToolTip="Off: a game's profile is used while the game is running, even in the background. On: only while its window is the one in front, so Alt-Tabbing away switches back."
+                                              Checked="FocusModeBox_Changed" Unchecked="FocusModeBox_Changed" />
+                                    <TextBlock x:Name="AutoInfo" Style="{StaticResource Muted}" FontSize="12" Margin="22,4,0,0" />
+                                </StackPanel>
+                            </ScrollViewer>
+                        </DockPanel>
+                    </Border>
+
+                    <!-- Live: the controller the game sees, and the wheel and pedals driving it -->
+                    <Border Grid.Column="2" Style="{StaticResource Card}">
+                        <DockPanel>
+                            <StackPanel DockPanel.Dock="Bottom" Margin="0,12,0,0">
+                                <TextBlock x:Name="TxtGameSees" Style="{StaticResource Muted}" Text="Game sees: nothing yet" TextWrapping="Wrap" />
+                                <Grid Margin="0,8,0,0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="TxtWheelButtons" Style="{StaticResource Muted}" Text="Wheel buttons down: none" VerticalAlignment="Center" TextWrapping="Wrap" />
+                                    <Button x:Name="CentreButton" Grid.Column="1" Content="Set centre" Style="{StaticResource Secondary}" Padding="12,5"
+                                            Click="CentreButton_Click" ToolTip="Let go of the wheel, then click: this position becomes the centre." />
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel>
+                                <DockPanel>
+                                    <CheckBox x:Name="ShowLabelsBox" DockPanel.Dock="Right" Content="Show mappings" Click="ShowLabels_Click"
+                                              ToolTip="Tag each control with the wheel control that feeds it." />
+                                    <TextBlock Text="WHAT THE GAME SEES  ·  CLICK A CONTROL TO ASSIGN IT" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                                </DockPanel>
+                                <local:PadDiagram x:Name="PadView" Width="400" Height="240" HorizontalAlignment="Center" Margin="0,4,0,10" />
+                                <TextBlock Text="KEYS AND MOUSE" Style="{StaticResource Caption}" />
+                                <local:KeyStrip x:Name="KeyChips" Margin="0,4,0,0" />
+                                <TextBlock x:Name="KeyNote" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8" Visibility="Collapsed" />
+                                <Grid Margin="0,0,0,12">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="100" /><ColumnDefinition Width="*" /><ColumnDefinition Width="70" /></Grid.ColumnDefinitions>
+                                    <TextBlock Text="Steering" VerticalAlignment="Center" />
+                                    <local:CentreBar x:Name="BarSteer" Grid.Column="1" Bipolar="True" />
+                                    <TextBlock x:Name="TxtSteer" Grid.Column="2" Style="{StaticResource ValueText}" Text="0&#176;" />
+                                </Grid>
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" /><ColumnDefinition Width="14" /><ColumnDefinition Width="*" /><ColumnDefinition Width="14" /><ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel>
+                                        <DockPanel><TextBlock x:Name="TxtThrottle" DockPanel.Dock="Right" Style="{StaticResource ValueText}" Text="0%" /><TextBlock Text="Accelerator" /></DockPanel>
+                                        <local:CentreBar x:Name="BarThrottle" Margin="0,4,0,0" Fill="{DynamicResource Success}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="2">
+                                        <DockPanel><TextBlock x:Name="TxtBrake" DockPanel.Dock="Right" Style="{StaticResource ValueText}" Text="0%" /><TextBlock Text="Brake" /></DockPanel>
+                                        <local:CentreBar x:Name="BarBrake" Margin="0,4,0,0" Fill="{DynamicResource Danger}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="4">
+                                        <DockPanel><TextBlock x:Name="TxtClutch" DockPanel.Dock="Right" Style="{StaticResource ValueText}" Text="0%" /><TextBlock Text="Clutch" /></DockPanel>
+                                        <local:CentreBar x:Name="BarClutch" Margin="0,4,0,0" Fill="{DynamicResource Warn}" />
+                                    </StackPanel>
+                                </Grid>
+                            </StackPanel>
+                        </DockPanel>
+                    </Border>
+                </Grid>
+            </TabItem>
+
+            <!-- ============================ Profiles ============================ -->
+            <TabItem Header="Profiles">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel Margin="0,12,0,0">
+                        <Border Style="{StaticResource Card}">
+                            <StackPanel>
+                                <TextBlock Text="CREATE" Style="{StaticResource Caption}" />
+                                <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap"
+                                           Text="Start a new profile from a template, or build one by pressing each control on the wheel." />
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button Content="New profile…" Style="{StaticResource Primary}" Padding="16,8" Margin="0,0,8,0" Click="NewProfile_Click" />
+                                    <Button Content="Remap all…" Style="{StaticResource Secondary}" Padding="16,8" Click="RemapAll_Click"
+                                            ToolTip="Walks through every control of the virtual controller and asks which wheel button or pedal to use." />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Text="SHARE" Style="{StaticResource Caption}" />
+                                <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap"
+                                           Text="Send a profile to a friend as a single file, or add one you were sent." />
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button Content="Import…" Style="{StaticResource Secondary}" Padding="16,8" Margin="0,0,8,0" Click="Import_Click" />
+                                    <Button Content="Export…" Style="{StaticResource Secondary}" Padding="16,8" Click="Export_Click" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                        <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Text="EDIT" Style="{StaticResource Caption}" />
+                                <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap"
+                                           Text="Change the rules of the profile chosen on the Home tab, or open its file in a text editor." />
+                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button Content="Edit rules…" Style="{StaticResource Secondary}" Padding="16,8" Margin="0,0,8,0" Click="EditRules_Click" />
+                                    <Button Content="Edit JSON file" Style="{StaticResource Secondary}" Padding="16,8" Margin="0,0,8,0" Click="EditFile_Click" />
+                                    <Button Content="Open profiles folder" Style="{StaticResource Secondary}" Padding="16,8" Margin="0,0,8,0" Click="OpenFolder_Click" />
+                                    <Button Content="Earlier versions&#8230;" Style="{StaticResource Secondary}" Padding="16,8" Click="History_Click"
+                                            ToolTip="Every change to a profile keeps the version before it. Restore one if an edit went wrong." />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </TabItem>
+
+            <!-- ============================ Devices ============================ -->
+            <TabItem Header="Devices">
+                <local:DevicesPanel x:Name="DevicesTab" Margin="0,12,0,0" />
+            </TabItem>
+        </TabControl>
+
+        <!-- Activity: one line until you ask for more -->
+        <Border Grid.Row="4" Style="{StaticResource Card}" Padding="14,6">
+            <Expander x:Name="LogExpander" Header="Activity" Expanded="LogExpander_Toggled" Collapsed="LogExpander_Toggled">
+                <ListBox x:Name="LogList" ItemContainerStyle="{StaticResource CompactItem}" Height="130" BorderThickness="0"
+                         FontFamily="Consolas" FontSize="12" Foreground="{DynamicResource TextSecondary}" Background="Transparent" Margin="0,6,0,4" />
+            </Expander>
+        </Border>
+    </Grid>
+</Window>

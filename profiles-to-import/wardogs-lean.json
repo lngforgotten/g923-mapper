@@ -1,0 +1,11 @@
+{
+  "name": "Wardogs lean",
+  "match": { "exe": ["WardogsClient-Win64-Shipping.exe"] },
+  "device": "g923_xbox",
+  "safety": "standard",
+  "outputs": { "keyboard": true },
+  "rules": [
+    { "from": "clutch", "to": "Key:Q", "curve": "linear", "threshold": 0.35 },
+    { "from": "throttle", "to": "Key:E", "curve": "linear", "threshold": 0.35 }
+  ]
+}

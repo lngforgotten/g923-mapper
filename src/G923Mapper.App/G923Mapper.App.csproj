@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>true</UseWindowsForms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <AssemblyName>G923Mapper</AssemblyName>
+    <RootNamespace>G923Mapper.App</RootNamespace>
+    <!-- WPF theme support (ThemeMode) is still flagged experimental. -->
+    <NoWarn>$(NoWarn);WPF0001</NoWarn>
+    <!-- The program's own icon: taskbar, Start menu shortcut, Installed apps. Regenerate with build\make-icon.ps1. -->
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <Version>1.0.0</Version>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Also available inside the app, for the tray icon and window icon. -->
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\G923Mapper.Runtime\G923Mapper.Runtime.csproj" />
+  </ItemGroup>
+
+</Project>

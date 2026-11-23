@@ -1,0 +1,66 @@
+G923 MAPPER - read me first
+==========================
+
+Lets a Logitech G923 wheel work in games that have no wheel support, by presenting it to the game as an
+Xbox 360 controller. Per-game profiles switch on by themselves.
+
+
+WHAT YOU NEED
+-------------
+- Windows 10 or 11, 64-bit.
+- Your G923, plugged in and powered.
+- An internet connection for the first install (it downloads the virtual-controller driver).
+- Nothing else. .NET is built in.
+
+
+INSTALL (about a minute)
+------------------------
+1. Right-click the zip file, choose Properties, tick "Unblock" if it is shown, then OK.
+   (Skipping this can make Windows show extra warnings.)
+2. Extract the zip to any folder.
+3. Double-click Setup.cmd.
+4. When it offers to install the ViGEmBus driver, type y and press Enter. Windows will ask for
+   administrator permission: say yes and click through that installer.
+5. G923 Mapper starts. Its icon sits in the system tray (bottom right, near the clock).
+
+To also install HidHide (optional, hides your real wheel from games so steering cannot fight itself),
+run Setup.cmd from a terminal with:   Setup.cmd -WithHidHide
+
+
+FIRST RUN
+---------
+The app opens a "Get started" checklist the first time it runs. It ticks each step by itself (driver, wheel, calibration,
+profile) and has a button for each, so you can mostly just follow it. The notes below say the same thing in words.
+
+1. Move the wheel a little so it wakes up. The header should say "Running".
+2. Settings, then Calibrate: follow the steps. It measures your wheel and pedals, so it works whichever
+   G923 edition you have.
+   - If you have the PlayStation edition, please send back the file
+        %APPDATA%\G923Mapper\devices.json
+     (paste that path into the Windows Explorer address bar). It lets the app support your wheel natively.
+3. Pick a profile on the main screen. For GTA V, choose "gta-v" (it also switches on by itself when the game
+   starts). More, then New profile, offers a few templates.
+4. Turn on Settings, "Start with Windows" if you want it always running.
+
+The header badge (for example "2 tips") opens a plain-language checklist if anything is not working.
+
+
+WINDOWS WARNINGS
+----------------
+This program is not digitally signed, so Windows SmartScreen may say "Windows protected your PC".
+Click "More info", then "Run anyway". Some antivirus programs are cautious about unsigned single-file
+programs; if yours complains, it is a false alarm you can allow.
+
+
+A NOTE ON GTA ONLINE
+--------------------
+GTA Online uses BattlEye anti-cheat. This app only creates a virtual controller from outside the game and
+never touches the game itself, but nobody can promise anti-cheat will never object to a virtual controller.
+Try Story Mode first, and keep keyboard output off for online play.
+
+
+UNINSTALL
+---------
+Windows Settings, Apps, Installed apps, G923 Mapper, Uninstall. Or double-click Uninstall.cmd.
+It shows your wheel to games again if HidHide was hiding it, and keeps your profiles and settings
+(in %APPDATA%\G923Mapper) unless you ask it to remove them.

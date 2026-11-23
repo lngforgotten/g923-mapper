@@ -1,0 +1,91 @@
+<UserControl x:Class="G923Mapper.App.DevicesPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:G923Mapper.App">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="12" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Controllers Windows sees -->
+        <Border Style="{StaticResource Card}">
+            <DockPanel>
+                <StackPanel DockPanel.Dock="Right" Orientation="Vertical" Margin="16,0,0,0" VerticalAlignment="Top">
+                    <Button Content="Refresh" Style="{StaticResource Secondary}" Margin="0,0,0,6" Click="Refresh_Click" />
+                    <Button Content="Copy as text" Style="{StaticResource Secondary}" Margin="0,0,0,6" Click="Copy_Click" />
+                    <Button Content="Test in Windows" Style="{StaticResource Secondary}" Click="Test_Click"
+                            ToolTip="Opens Windows' own game controller test, to see what a game would see." />
+                </StackPanel>
+                <StackPanel>
+                    <TextBlock Text="GAME CONTROLLERS ON THIS PC" Style="{StaticResource Caption}" />
+                    <ItemsControl x:Name="DeviceList">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Grid Margin="0,0,0,8">
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="22" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding Symbol}" FontSize="16" Foreground="{Binding Brush}" VerticalAlignment="Top" />
+                                    <StackPanel Grid.Column="1">
+                                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                        <TextBlock Text="{Binding Detail}" Style="{StaticResource Muted}" TextWrapping="Wrap" />
+                                    </StackPanel>
+                                </Grid>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                    <TextBlock x:Name="NoDevices" Style="{StaticResource Muted}" Text="No game controllers found." Visibility="Collapsed" />
+                    <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+                        <Button x:Name="HideButton" Style="{StaticResource Secondary}" Click="Hide_Click" />
+                        <TextBlock x:Name="HideMessage" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="12,0,0,0" TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+            </DockPanel>
+        </Border>
+
+        <!-- Live view -->
+        <Border Grid.Row="2" Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="LIVE: THE WHEEL THIS APP USES" Style="{StaticResource Caption}" />
+                <Viewbox Stretch="Uniform" StretchDirection="DownOnly" HorizontalAlignment="Left" MaxHeight="250">
+                    <local:WheelView x:Name="View" Width="640" Height="230" />
+                </Viewbox>
+                <TextBlock x:Name="LiveText" Style="{StaticResource Muted}" FontFamily="Consolas" Margin="0,8,0,0" TextWrapping="Wrap" />
+            </StackPanel>
+        </Border>
+
+        <!-- What games see -->
+        <Border Grid.Row="4" Style="{StaticResource Card}">
+            <StackPanel>
+                <DockPanel>
+                    <CheckBox x:Name="ShowLabelsBox" DockPanel.Dock="Right" Content="Show mappings" Click="ShowLabels_Click"
+                              ToolTip="Tag each control with the wheel control that feeds it." />
+                    <TextBlock Text="LIVE: WHAT GAMES SEE (CLICK A CONTROL TO ASSIGN IT)" Style="{StaticResource Caption}" VerticalAlignment="Center" />
+                </DockPanel>
+                <Grid Margin="0,4,0,0">
+                    <local:PadDiagram x:Name="Pad" Width="420" Height="252" HorizontalAlignment="Center" />
+                    <local:FlowOverlay x:Name="Flow" />
+                </Grid>
+                <TextBlock Text="KEYS AND MOUSE" Style="{StaticResource Caption}" Margin="0,10,0,0" />
+                <local:KeyStrip x:Name="KeyChips" Margin="0,4,0,0" />
+                <TextBlock x:Name="KeyNote" Style="{StaticResource Muted}" TextWrapping="Wrap" Visibility="Collapsed" />
+                <TextBlock x:Name="FlowNote" Style="{StaticResource Muted}" Margin="0,6,0,0" TextWrapping="Wrap"
+                           Text="Each chip is a wheel control the profile uses, with a line to the controller control it feeds. Lines light up while you use the control; point at a chip or a controller control to see just its lines." />
+            </StackPanel>
+        </Border>
+
+        <!-- Rumble -->
+        <Border Grid.Row="6" Style="{StaticResource Card}">
+            <StackPanel>
+                <TextBlock Text="RUMBLE THE GAME IS SENDING (H = HEAVY MOTOR, L = LIGHT MOTOR, LAST 10 SECONDS)" Style="{StaticResource Caption}" />
+                <local:RumbleGraph x:Name="Rumble" Height="86" Margin="0,6,0,0" />
+            </StackPanel>
+        </Border>
+    </Grid>
+    </ScrollViewer>
+</UserControl>

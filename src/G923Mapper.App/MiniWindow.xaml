@@ -1,0 +1,39 @@
+<Window x:Class="G923Mapper.App.MiniWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:G923Mapper.App"
+        Title="G923 Mapper (mini)" Width="340" SizeToContent="Height" ResizeMode="CanMinimize" Topmost="True"
+        WindowStartupLocation="Manual" Background="{DynamicResource WindowBack}" FontFamily="Segoe UI" FontSize="12"
+        UseLayoutRounding="True" SnapsToDevicePixels="True">
+    <StackPanel Margin="12">
+        <DockPanel Margin="0,0,0,6">
+            <CheckBox x:Name="OnTopBox" DockPanel.Dock="Right" Content="On top" IsChecked="True" Click="OnTop_Click" />
+            <Ellipse x:Name="Dot" Width="10" Height="10" Fill="{DynamicResource Neutral}" Margin="0,0,8,0" VerticalAlignment="Center" />
+            <TextBlock x:Name="TxtProfile" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+        </DockPanel>
+        <local:PadDiagram x:Name="Pad" Width="316" Height="190" HorizontalAlignment="Center" />
+        <Grid Margin="0,8,0,6">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="62" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
+            <TextBlock Text="Steering" VerticalAlignment="Center" />
+            <local:CentreBar x:Name="BarSteer" Grid.Column="1" Bipolar="True" />
+            <TextBlock x:Name="TxtSteer" Grid.Column="2" Style="{StaticResource ValueText}" Text="0&#176;" />
+        </Grid>
+        <Grid>
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+            <StackPanel>
+                <TextBlock Text="Accel" Style="{StaticResource Muted}" />
+                <local:CentreBar x:Name="BarThrottle" Margin="0,3,0,0" Fill="{DynamicResource Success}" />
+            </StackPanel>
+            <StackPanel Grid.Column="2">
+                <TextBlock Text="Brake" Style="{StaticResource Muted}" />
+                <local:CentreBar x:Name="BarBrake" Margin="0,3,0,0" Fill="{DynamicResource Danger}" />
+            </StackPanel>
+            <StackPanel Grid.Column="4">
+                <TextBlock Text="Clutch" Style="{StaticResource Muted}" />
+                <local:CentreBar x:Name="BarClutch" Margin="0,3,0,0" Fill="{DynamicResource Warn}" />
+            </StackPanel>
+        </Grid>
+    </StackPanel>
+</Window>

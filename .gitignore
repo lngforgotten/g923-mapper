@@ -1,0 +1,17 @@
+# Build output
+bin/
+obj/
+dist/
+dist-small/
+*.zip
+
+# Editor and tool folders
+.vs/
+.vscode/
+.idea/
+.claude/
+*.user
+*.suo
+
+# Scratch files
+scratch-*.ps1
