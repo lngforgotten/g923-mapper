@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -211,11 +211,25 @@ public partial class MainWindow : Window
     {
         UpdateInfo? info = _s.AvailableUpdate;
         UpdatePhase phase = _s.UpdatePhase;
+
+        // Just updated to a new version: say so, once, with a link to what is new, until it is dismissed.
+        if (_s.JustUpdatedTag.Length > 0 && info is not { Newer: true })
+        {
+            UpdatePanel.Visibility = Visibility.Visible;
+            UpdateText.Foreground = ThemeManager.Success;
+            UpdateText.Text = $"Updated to {_s.JustUpdatedTag}.";
+            UpdateActionButton.Visibility = Visibility.Collapsed;
+            UpdateNotesButton.Visibility = UpdateLaterButton.Visibility = Visibility.Visible;
+            UpdateLaterButton.Content = "OK";
+            return;
+        }
+        UpdateLaterButton.Content = "Later";
         // A download that is running, or an update that is ready, is always shown; an offer can be put off with Later.
         bool show = info is { Newer: true } && (phase is UpdatePhase.Downloading or UpdatePhase.Ready || info.LatestTag != Settings.UpdateDismissedTag);
         UpdatePanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show) return;
 
+        UpdateText.Foreground = phase == UpdatePhase.Failed ? ThemeManager.Warn : ThemeManager.Success;
         string tag = info!.LatestTag;
         switch (phase)
         {
@@ -224,7 +238,7 @@ public partial class MainWindow : Window
                 UpdateActionButton.Visibility = UpdateNotesButton.Visibility = UpdateLaterButton.Visibility = Visibility.Collapsed;
                 break;
             case UpdatePhase.Ready:
-                UpdateText.Text = $"Version {tag} is ready. It installs by itself the next time the app starts.";
+                UpdateText.Text = Settings.AutoApplyUpdates ? $"Version {tag} is ready. It installs by itself the next time the app starts." : $"Version {tag} is ready. Press Restart now to install it.";
                 UpdateActionButton.Content = "Restart now";
                 UpdateActionButton.ToolTip = "Close the app and start the new version straight away.";
                 UpdateActionButton.Visibility = UpdateNotesButton.Visibility = UpdateLaterButton.Visibility = Visibility.Visible;
@@ -252,13 +266,15 @@ public partial class MainWindow : Window
 
     private void UpdateDownload_Click(object sender, RoutedEventArgs e)
     {
-        string url = _s.AvailableUpdate?.Url ?? "";
+        string url = _s.AvailableUpdate?.Url
+            ?? (_s.JustUpdatedTag.Length > 0 ? $"https://github.com/{UpdateCheck.NormaliseRepo(UpdateCheck.RepoOrDefault(Settings.UpdateRepo)) ?? UpdateCheck.DefaultRepo}/releases/tag/{_s.JustUpdatedTag}" : "");
         if (url.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase))
             try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); } catch (System.ComponentModel.Win32Exception) { }
     }
 
     private void UpdateLater_Click(object sender, RoutedEventArgs e)
     {
+        if (_s.JustUpdatedTag.Length > 0 && _s.AvailableUpdate is not { Newer: true }) { _s.JustUpdatedTag = ""; ShowUpdate(); return; }     // OK on "Updated to ..."
         if (_s.AvailableUpdate is { } info) { Settings.UpdateDismissedTag = info.LatestTag; Settings.Save(); }
         ShowUpdate();
     }
@@ -1022,3 +1038,4 @@ public partial class MainWindow : Window
         base.OnClosed(e);
     }
 }
+

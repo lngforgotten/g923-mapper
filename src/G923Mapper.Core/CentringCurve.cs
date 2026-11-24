@@ -62,6 +62,16 @@ public static class CentringCurve
         new("Sports car", 40, 8, 70, 35, 6),
         new("Heavy truck", 45, 16, 80, 70, 10),
         new("Strong and simple", 60, 6, 90, 85, 4),
+        new("Race car (single-seater)", 45, 6, 40, 30, 6),
+        new("Rally / gravel", 25, 20, 90, 55, 4),
+        new("Drift car", 20, 14, 120, 100, 3),
+        new("Classic car", 35, 18, 100, 90, 12),
+        new("Arcade", 40, 4, 60, 100, 4),
+        new("Truck / bus / tractor", 45, 24, 90, 80, 15),
+        new("Tank / armoured vehicle", 35, 30, 120, 100, 20),
+        new("Boat", 12, 40, 150, 100, 25),
+        new("Aircraft / flight yoke", 30, 25, 150, 100, 8),
+        new("Off (no centring)", 0, 12, 60, 40, 5),
     ];
 
     /// <summary>How strong the curve is at this angle, 0 to 1 (1 is the peak), before the strength and the floor are applied. Symmetric about the middle.</summary>
@@ -258,5 +268,6 @@ public sealed class FrictionProbe
 
     private void Fail(string why) { Problem = why; _phase = Phase.Done; }
 }
+
 
 

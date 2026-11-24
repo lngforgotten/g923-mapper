@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net.Http;
 using System.IO;
 using System.Threading.Tasks;
@@ -14,7 +14,7 @@ internal static class UpdateChecker
     /// <summary>The newest release compared with this version, or a sentence saying why that could not be found out.</summary>
     public static async Task<(UpdateInfo? Info, string? Problem)> CheckAsync(string? repoText)
     {
-        string? repo = UpdateCheck.NormaliseRepo(repoText);
+        string? repo = UpdateCheck.NormaliseRepo(UpdateCheck.RepoOrDefault(repoText));
         if (repo is null) return (null, "Enter a GitHub repository as owner/name (or its github.com address) first.");
         try
         {
@@ -37,35 +37,41 @@ internal static class UpdateChecker
 }
 
 /// <summary>
-/// Looks for a new version by itself, quietly: a little after start-up and then about once a day while the app is running. Switched on by default
+/// Looks for a new version by itself, quietly: a few seconds after every start-up, and then about every six hours while the app keeps running in the tray. Switched on by default
 /// and off with one tick in Settings. When one is found it is shown on Home (with a Download button) and in one Windows notification per version.
 /// A check that could not reach GitHub is simply tried again later.
 /// </summary>
 internal sealed class AutoUpdate : IDisposable
 {
-    private static readonly TimeSpan MinGap = TimeSpan.FromHours(20);
+    /// <summary>
+    /// A start-up check happens every time the app starts, but not if one was made in the last few minutes (so closing and reopening, or a program
+    /// that keeps restarting, cannot hammer GitHub). While running, it looks again every few hours.
+    /// </summary>
+    private static readonly TimeSpan LaunchGap = TimeSpan.FromMinutes(10), RunningGap = TimeSpan.FromHours(6);
     private readonly AppServices _s;
     private readonly Action<UpdateInfo> _found;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromHours(1) };
-    private readonly DispatcherTimer _first = new() { Interval = TimeSpan.FromSeconds(25) };
+    private readonly DispatcherTimer _first = new() { Interval = TimeSpan.FromSeconds(8) };
     private bool _busy;
 
     public AutoUpdate(AppServices services, Action<UpdateInfo> found)
     {
         _s = services;
         _found = found;
-        _timer.Tick += async (_, _) => await TickAsync();
-        _first.Tick += async (_, _) => { _first.Stop(); await TickAsync(); _timer.Start(); };
+        _timer.Tick += async (_, _) => await TickAsync(RunningGap);
+        _first.Tick += async (_, _) => { _first.Stop(); await TickAsync(LaunchGap); _timer.Start(); };
     }
 
     public void Start() => _first.Start();
 
     /// <summary>Whether enough time has passed since the last successful check.</summary>
-    internal static bool Due(string? lastUtc, DateTime nowUtc) => UpdateCheck.Due(lastUtc, nowUtc, MinGap);
-    private async System.Threading.Tasks.Task TickAsync()
+    internal static bool Due(string? lastUtc, DateTime nowUtc, TimeSpan gap) => UpdateCheck.Due(lastUtc, nowUtc, gap);
+
+    private async System.Threading.Tasks.Task TickAsync(TimeSpan gap)
     {
-        if (_busy || !_s.Settings.AutoUpdateCheck || string.IsNullOrWhiteSpace(_s.Settings.UpdateRepo)) return;
-        if (!Due(_s.Settings.LastUpdateCheckUtc, DateTime.UtcNow)) return;
+        if (_busy) return;
+        if (!_s.Settings.AutoUpdateCheck) { AppLog.Info("Automatic update check skipped: it is switched off in Settings."); return; }
+        if (!Due(_s.Settings.LastUpdateCheckUtc, DateTime.UtcNow, gap)) { AppLog.Info($"Automatic update check skipped: one was made at {_s.Settings.LastUpdateCheckUtc}."); return; }
         _busy = true;
         try
         {
@@ -113,8 +119,8 @@ internal static class UpdateInstaller
 
     public static async Task<(StagedUpdate? Staged, string Message)> StageAsync(UpdateInfo info, string? repoText, IProgress<int>? progress, System.Threading.CancellationToken ct = default)
     {
-        string? repo = UpdateCheck.NormaliseRepo(repoText);
-        if (repo is null) return (null, "No update repository is set.");
+        string? repo = UpdateCheck.NormaliseRepo(UpdateCheck.RepoOrDefault(repoText));
+        if (repo is null) return (null, "The update repository is not a valid GitHub address.");
         UpdateAsset? asset = UpdatePackage.Choose(info.Assets ?? [], IsFullBuild(), repo);
         if (asset is null) return (null, "That release has no download for this build of the app.");
         Version? version = UpdateCheck.ParseVersion(info.LatestTag);
@@ -179,3 +185,5 @@ internal static class UpdateInstaller
         }
     }
 }
+
+

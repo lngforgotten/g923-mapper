@@ -52,23 +52,23 @@
                 <TextBlock Grid.Column="4" Text="Games" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
                 <TextBox x:Name="ExeBox" Grid.Column="5" TextChanged="Profile_Changed"
                          ToolTip="Executable names that activate this profile automatically, separated by commas (for example GTA5.exe, GTA5_Enhanced.exe)." />
-                <StackPanel Grid.Row="1" Grid.ColumnSpan="6" Orientation="Horizontal" Margin="0,10,0,0">
+                <WrapPanel Grid.Row="1" Grid.ColumnSpan="6" Margin="0,10,0,0">
                     <TextBlock Text="Safety" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
                     <ComboBox x:Name="SafetyBox" Width="190" SelectionChanged="Safety_Changed" VerticalAlignment="Center"
                               ToolTip="Strict: controller mapping only, the safe choice for online games and anti-cheat. Standard: extras such as keyboard output may be used." />
                     <CheckBox x:Name="KeyboardBox" Content="Allow keyboard and mouse output" Margin="16,0,0,0" Checked="Keyboard_Changed" Unchecked="Keyboard_Changed" VerticalAlignment="Center" />
-                    <TextBlock x:Name="SafetyHint" Style="{StaticResource Hint}" Margin="14,0,0,0" VerticalAlignment="Center"
+                    <TextBlock x:Name="SafetyHint" TextWrapping="Wrap" Style="{StaticResource Hint}" Margin="14,0,0,0" VerticalAlignment="Center"
                                Text="Games are matched by program name, for example GTA5.exe. Leave empty to use this profile only when chosen by hand." />
-                </StackPanel>
-                <StackPanel Grid.Row="2" Grid.ColumnSpan="6" Orientation="Horizontal" Margin="0,10,0,0">
+                </WrapPanel>
+                <WrapPanel Grid.Row="2" Grid.ColumnSpan="6" Margin="0,10,0,0">
                     <TextBlock Text="Controller" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
                     <ComboBox x:Name="PadBox" Width="170" SelectionChanged="Profile_Changed" VerticalAlignment="Center"
                               ToolTip="What the game sees. Match the wheel gives a PlayStation edition wheel a DualShock 4 and any other wheel an Xbox 360 controller. Xbox 360 works with nearly every PC game; DualShock 4 is for games that show PlayStation prompts." />
                     <CheckBox x:Name="SecondPadBox" Content="Second controller" Margin="14,0,0,0" VerticalAlignment="Center" Checked="SecondPad_Changed" Unchecked="SecondPad_Changed"
                               ToolTip="Also show the game a second virtual controller. Rules whose output starts with P2: (listed once this is ticked) feed it, for example the pedals on their own controller." />
-                    <TextBlock x:Name="PadHint" Style="{StaticResource Hint}" Margin="14,0,0,0" VerticalAlignment="Center" />
-                </StackPanel>
-                <StackPanel Grid.Row="3" Grid.ColumnSpan="6" Orientation="Horizontal" Margin="0,10,0,0">
+                    <TextBlock x:Name="PadHint" TextWrapping="Wrap" Style="{StaticResource Hint}" Margin="14,0,0,0" VerticalAlignment="Center" />
+                </WrapPanel>
+                <WrapPanel Grid.Row="3" Grid.ColumnSpan="6" Margin="0,10,0,0">
                     <TextBlock Text="Feel" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
                     <CheckBox x:Name="FeelBox" Content="Own force feedback" VerticalAlignment="Center" Checked="Profile_Changed" Unchecked="Profile_Changed"
                               ToolTip="Tick to give this profile its own rumble strength, centring spring and rumble motors, instead of the ones in Settings. Untick to use the Settings values." />
@@ -83,8 +83,8 @@
                     <TextBlock x:Name="FeelFrictionText" Width="40" Style="{StaticResource ValueText}" VerticalAlignment="Center" Margin="6,0,0,0" />
                     <ComboBox x:Name="FeelMotors" Width="150" Margin="12,0,0,0" VerticalAlignment="Center" SelectionChanged="Profile_Changed"
                               ToolTip="Which of the game's two rumble motors the wheel plays." />
-                </StackPanel>
-                <StackPanel Grid.Row="4" Grid.ColumnSpan="6" Orientation="Horizontal" Margin="0,10,0,0">
+                </WrapPanel>
+                <WrapPanel Grid.Row="4" Grid.ColumnSpan="6" Margin="0,10,0,0">
                     <TextBlock Text="Wheel" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
                     <ComboBox x:Name="HideWheelBox" Width="290" SelectionChanged="Profile_Changed" VerticalAlignment="Center"
                               ToolTip="With HidHide installed, a profile can hide the real wheel from games while its game is running, and give it back afterwards. It never happens just because the profile is selected. Each change asks for administrator permission." />
@@ -92,8 +92,8 @@
                               ToolTip="For a game with its own wheel support (force feedback included). While this profile is in use the mapper lets go of the wheel and creates no virtual controller, so the game has the wheel to itself. The profile's rules do nothing." />
                     <CheckBox x:Name="KeepKeysBox" Content="but still send keys and mouse" Margin="12,0,0,0" VerticalAlignment="Center" Checked="Profile_Changed" Unchecked="Profile_Changed"
                               ToolTip="Still read the wheel, without taking it over, and send the keyboard and mouse rules (for example a gear shifter that presses keys) while the game keeps the wheel and its force feedback. There is no virtual controller, so rules that send to it do nothing. Keyboard output needs Standard safety." />
-                    <TextBlock x:Name="HideWheelHint" Style="{StaticResource Hint}" Margin="14,0,0,0" VerticalAlignment="Center" />
-                </StackPanel>
+                    <TextBlock x:Name="HideWheelHint" TextWrapping="Wrap" Style="{StaticResource Hint}" Margin="14,0,0,0" VerticalAlignment="Center" />
+                </WrapPanel>
                 <WrapPanel x:Name="ModeRow" Grid.Row="7" Grid.ColumnSpan="6" Margin="0,10,0,0">
                     <TextBlock Text="Editing" Style="{StaticResource FieldLabel}" Margin="0,0,8,4" VerticalAlignment="Center" />
                     <ComboBox x:Name="ViewBox" Width="270" Margin="0,0,0,4" SelectionChanged="View_Changed"
@@ -109,14 +109,14 @@
                             ToolTip="Tick any of the profile's rules that should not apply while this mode is active." />
                     <Button x:Name="SwitchRuleButton" Content="Add a switch button" Style="{StaticResource Secondary}" Padding="10,4" Margin="6,0,0,4" Click="SwitchRule_Click"
                             ToolTip="Add a rule so a wheel button moves to the next mode. Press Learn on the new rule to pick the button." />
-                    <TextBlock x:Name="ModeNote" Style="{StaticResource Hint}" Margin="0,2,0,0" TextWrapping="Wrap" Width="960" />
+                    <TextBlock x:Name="ModeNote" Style="{StaticResource Hint}" Margin="0,2,0,0" TextWrapping="Wrap" Width="{Binding ActualWidth, ElementName=ModeRow}" />
                 </WrapPanel>
-                <StackPanel x:Name="TemplateRow" Grid.Row="6" Grid.ColumnSpan="6" Orientation="Horizontal" Margin="0,10,0,0" Visibility="Collapsed">
+                <WrapPanel x:Name="TemplateRow" Grid.Row="6" Grid.ColumnSpan="6" Margin="0,10,0,0" Visibility="Collapsed">
                     <TextBlock Text="Template" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
                     <TextBlock x:Name="TemplateInfo" VerticalAlignment="Center" />
                     <Button x:Name="TemplateMenuButton" Content="Template options" Style="{StaticResource Secondary}" Padding="12,4" Margin="14,0,0,0" Click="TemplateMenu_Click"
                             ToolTip="See what this profile does its own way, put a rule or setting back to the template's, or take in a changed template." />
-                </StackPanel>
+                </WrapPanel>
                 <TextBlock Grid.Row="5" Text="Notes" Style="{StaticResource FieldLabel}" Margin="0,10,8,0" VerticalAlignment="Top" />
                 <TextBox x:Name="NotesBox" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="5" Margin="0,10,0,0" Height="50" AcceptsReturn="True" TextWrapping="Wrap"
                          VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top" TextChanged="Profile_Changed"
@@ -318,4 +318,5 @@
         </DockPanel>
     </Grid>
 </Window>
+
 

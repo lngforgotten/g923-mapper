@@ -133,11 +133,11 @@ public class CentringCurveTests
     [Fact]
     public void Every_preset_is_sensible_and_applying_it_sets_exactly_its_values()
     {
-        Assert.True(CentringCurve.Presets.Count >= 3);
+        Assert.True(CentringCurve.Presets.Count >= 15);
         Assert.Equal(CentringCurve.Presets.Count, CentringCurve.Presets.Select(p => p.Name).Distinct().Count());
         foreach (var p in CentringCurve.Presets)
         {
-            Assert.InRange(p.Strength, 5, 70);
+            Assert.InRange(p.Strength, 0, 70);
             Assert.True(p.CentreDegrees < p.PeakDegrees, p.Name);
             Assert.InRange(p.LighteningPercent, 0, 100);
             var s = new ForceSettings();

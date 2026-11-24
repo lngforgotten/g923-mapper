@@ -111,3 +111,49 @@ public class UpdateDueTests
         Assert.True(UpdateCheck.Due(Now.AddDays(2).ToString("o"), Now, Gap));
     }
 }
+
+public class UpdateTimingTests
+{
+    private static readonly DateTime Now = new(2026, 11, 24, 12, 0, 0, DateTimeKind.Utc);
+    private static readonly TimeSpan LaunchGap = TimeSpan.FromMinutes(10), RunningGap = TimeSpan.FromHours(6);
+
+    [Fact]
+    public void Every_start_looks_unless_a_check_was_made_in_the_last_few_minutes()
+    {
+        Assert.True(UpdateCheck.Due(Now.AddHours(-3).ToString("o"), Now, LaunchGap));      // reopened hours later: look
+        Assert.True(UpdateCheck.Due(Now.AddMinutes(-11).ToString("o"), Now, LaunchGap));
+        Assert.False(UpdateCheck.Due(Now.AddMinutes(-3).ToString("o"), Now, LaunchGap));   // closed and reopened straight away: do not ask again
+        Assert.True(UpdateCheck.Due(null, Now, LaunchGap));                                // never checked
+    }
+
+    [Fact]
+    public void While_running_it_looks_again_every_six_hours()
+    {
+        Assert.False(UpdateCheck.Due(Now.AddHours(-5).ToString("o"), Now, RunningGap));
+        Assert.True(UpdateCheck.Due(Now.AddHours(-6).ToString("o"), Now, RunningGap));
+    }
+}
+
+public class UpdateRepositoryDefaultTests
+{
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void An_empty_update_box_means_the_default_repository(string? text) =>
+        Assert.Equal(UpdateCheck.DefaultRepo, UpdateCheck.RepoOrDefault(text));
+
+    [Fact]
+    public void Something_typed_is_used_as_it_is_and_the_default_is_a_valid_repository()
+    {
+        Assert.Equal("a/b", UpdateCheck.RepoOrDefault("  a/b "));
+        Assert.Equal(UpdateCheck.DefaultRepo, UpdateCheck.NormaliseRepo(UpdateCheck.DefaultRepo));
+        Assert.Equal("lngforgotten/g923-mapper", UpdateCheck.NormaliseRepo(UpdateCheck.RepoOrDefault("")));
+    }
+
+    [Fact]
+    public void Something_that_is_not_a_repository_is_not_replaced_by_the_default()
+    {
+        Assert.Null(UpdateCheck.NormaliseRepo(UpdateCheck.RepoOrDefault("not a repo")));
+    }
+}

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -63,13 +63,15 @@ public partial class SettingsWindow : Window
         MotorsBox.ItemsSource = new[] { "Both (heavy and light)", "Heavy only", "Light only" };
         MotorsBox.SelectedIndex = f.Motors == ForceMath.MotorsHeavy ? 1 : f.Motors == ForceMath.MotorsLight ? 2 : 0;
         CentringStyleBox.ItemsSource = new[] { "Straight spring", "Curve (like a car)" };
-        CentringPresetBox.ItemsSource = new[] { "Custom" }.Concat(CentringCurve.Presets.Select(p => p.Name)).ToList();
+        RefreshPresetList();
         ShowCurveSettings(f);
         UpdateForceTexts();
 
         UpdateRepoBox.Text = _s.Settings.UpdateRepo;
         AutoUpdateBox.IsChecked = _s.Settings.AutoUpdateCheck;
         AutoInstallBox.IsChecked = _s.Settings.AutoInstallUpdates;
+        AutoApplyBox.IsChecked = _s.Settings.AutoApplyUpdates;
+        AutoApplyBox.IsEnabled = _s.Settings.AutoInstallUpdates;
         AboutText.Text = $"G923 Mapper {typeof(SettingsWindow).Assembly.GetName().Version?.ToString(3) ?? ""}  ·  {RuntimeInformation.FrameworkDescription}";
 
         _loading = false;
@@ -302,7 +304,16 @@ public partial class SettingsWindow : Window
     {
         if (_loading) return;
         _s.Settings.AutoInstallUpdates = AutoInstallBox.IsChecked == true;
+        AutoApplyBox.IsEnabled = AutoInstallBox.IsChecked == true;
         _s.Settings.Save();
+    }
+
+    private void AutoApply_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _s.Settings.AutoApplyUpdates = AutoApplyBox.IsChecked == true;
+        _s.Settings.Save();
+        _s.UpdateChanged?.Invoke();
     }
 
     private async void InstallUpdate_Click(object sender, RoutedEventArgs e)
@@ -473,7 +484,8 @@ public partial class SettingsWindow : Window
         DampSlider.Value = Math.Clamp(f.DampingPercent, 0, 100);
         FloorSlider.Value = Math.Clamp(f.FloorPercent, 0, FloorSlider.Maximum);
         SpringSlider.Value = Math.Clamp(f.SpringPercent, 0, 100);
-        CentringPresetBox.SelectedIndex = CentringCurve.Presets.ToList().FindIndex(p => p.Matches(f)) + 1;   // 0 = Custom
+        CentringPresetBox.SelectedIndex = CentringPresetBook.All(_s.Settings.CentringPresets).ToList().FindIndex(p => p.Matches(f)) + 1;   // 0 = Custom
+        UpdatePresetButtons();
         ReversedBox.IsChecked = f.CentringReversed;
         CurvePanel.Visibility = CentringStyleBox.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
         _loading = was;
@@ -496,11 +508,65 @@ public partial class SettingsWindow : Window
     {
         if (_loading || CentringPresetBox.SelectedIndex <= 0) return;
         var f = _s.Settings.Force.Clone();
-        CentringCurve.Presets[CentringPresetBox.SelectedIndex - 1].ApplyTo(f);
+        CentringPresetBook.All(_s.Settings.CentringPresets)[CentringPresetBox.SelectedIndex - 1].ApplyTo(f);
         f.CentringStyle = CentringCurve.StyleCurve;
         ShowCurveSettings(f);
         UpdateForceTexts();
         PushForce();
+    }
+
+    /// <summary>Fill the Car box: Custom, the built-in presets, then the person's own (marked as theirs).</summary>
+    private void RefreshPresetList()
+    {
+        bool was = _loading;
+        _loading = true;
+        var own = _s.Settings.CentringPresets;
+        CentringPresetBox.ItemsSource = new[] { "Custom" }
+            .Concat(CentringCurve.Presets.Select(p => p.Name))
+            .Concat(own.Select(p => "Mine: " + p.Name))
+            .ToList();
+        _loading = was;
+    }
+
+    /// <summary>Delete is only for one of the person's own presets, which is the selected one.</summary>
+    private void UpdatePresetButtons()
+    {
+        int i = CentringPresetBox.SelectedIndex - 1;
+        DeletePresetButton.IsEnabled = i >= CentringCurve.Presets.Count && i < CentringCurve.Presets.Count + _s.Settings.CentringPresets.Count;
+    }
+
+    private void SavePreset_Click(object sender, RoutedEventArgs e)
+    {
+        string? name = Prompt.Ask(this, "Save centring preset", "A name for this curve, for example the game or the vehicle it is for.", "");
+        if (name is null) return;
+        if (CentringPresetBook.NameProblem(name) is { } problem)
+        {
+            MessageBox.Show(this, problem, "Save centring preset", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        var preset = CentringPresetBook.FromSettings(name, _s.Settings.Force);
+        if (CentringPresetBook.IsMine(_s.Settings.CentringPresets, name)
+            && MessageBox.Show(this, $"You already have a preset called \"{preset.Name}\". Replace it?", "Save centring preset", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        if (!CentringPresetBook.Save(_s.Settings.CentringPresets, preset))
+        {
+            MessageBox.Show(this, $"You can keep up to {CentringPresetBook.MaxOwnPresets} presets of your own. Delete one first.", "Save centring preset", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        _s.Settings.Save();
+        RefreshPresetList();
+        ShowCurveSettings(_s.Settings.Force);
+    }
+
+    private void DeletePreset_Click(object sender, RoutedEventArgs e)
+    {
+        int i = CentringPresetBox.SelectedIndex - 1 - CentringCurve.Presets.Count;
+        if (i < 0 || i >= _s.Settings.CentringPresets.Count) return;
+        string name = _s.Settings.CentringPresets[i].Name;
+        if (MessageBox.Show(this, $"Delete your preset \"{name}\"?", "Delete centring preset", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        CentringPresetBook.Remove(_s.Settings.CentringPresets, name);
+        _s.Settings.Save();
+        RefreshPresetList();
+        ShowCurveSettings(_s.Settings.Force);
     }
 
     private void Measure_Click(object sender, RoutedEventArgs e)
@@ -724,3 +790,5 @@ public partial class SettingsWindow : Window
 
     private void Done_Click(object sender, RoutedEventArgs e) => Close();
 }
+
+

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -125,6 +125,7 @@ public partial class App : Application
             _modeHotkeys = new HotkeyManager(_hwnd, () => service.RequestMode("Next"), 0x6924);   // the loop does the switching, from any thread
             service.ModeChanged += OnModeChanged;
             _services.RestartForUpdate = RestartForUpdate;
+            AnnounceUpdateState(_services);
             _services.InstallUpdateNow = InstallUpdateNowAsync;
             _autoUpdate = new AutoUpdate(_services, OnUpdateFound);
             _autoUpdate.Start();
@@ -310,6 +311,29 @@ public partial class App : Application
         });
     }
 
+    /// <summary>
+    /// At start-up: if the app has just updated itself, say so once (Home and a notification). If an update is waiting that was not swapped in
+    /// (the person chose to press Restart now themselves), show it as ready again.
+    /// </summary>
+    private void AnnounceUpdateState(AppServices s)
+    {
+        if (UpdatePackage.TakeUpdatedMarker(AppSettings.UpdatedMarkerPath, RunningVersion) is { } tag)
+        {
+            s.JustUpdatedTag = tag;
+            AppLog.Info($"Updated to {tag}: telling the person.");
+            _window?.Dispatcher.BeginInvoke(() => _tray?.ShowBalloon("G923 Mapper has updated", $"Now running {tag}. Open the app to see what is new."));
+            return;
+        }
+        StagedUpdate? waiting = UpdatePackage.ReadStaged(AppSettings.StagedDir);
+        if (waiting is not null && UpdatePackage.IsNewer(waiting, RunningVersion) && UpdatePackage.IsInstalledCopy(Environment.ProcessPath, InstallDir))
+        {
+            string repo = UpdateCheck.NormaliseRepo(UpdateCheck.RepoOrDefault(s.Settings.UpdateRepo)) ?? UpdateCheck.DefaultRepo;
+            s.AvailableUpdate = new UpdateInfo(true, waiting.Tag, $"https://github.com/{repo}/releases/tag/{waiting.Tag}", $"{waiting.Tag} is ready.");
+            s.UpdatePhase = UpdatePhase.Ready;
+            _stagedTag = waiting.Tag;
+        }
+    }
+
     /// <summary>The "Install now" button: download the new version if it is not ready yet, then restart into it.</summary>
     private async Task InstallUpdateNowAsync()
     {
@@ -351,7 +375,9 @@ public partial class App : Application
         {
             s.Settings.UpdateNotifiedTag = staged.Tag;
             s.Settings.Save();
-            _tray?.ShowBalloon($"G923 Mapper {staged.Tag} is ready", "It installs by itself the next time the app starts. Open the app and press Restart now to use it straight away.");
+            _tray?.ShowBalloon($"G923 Mapper {staged.Tag} is ready", s.Settings.AutoApplyUpdates
+                ? "It installs by itself the next time the app starts. Open the app and press Restart now to use it straight away."
+                : "Open the app and press Restart now to install it.");
         }
     }
 
@@ -381,6 +407,7 @@ public partial class App : Application
     {
         AppLog.Info($"Updated to {staged.Tag}.");
         UpdatePackage.ClearStaged(AppSettings.UpdateDir);
+        UpdatePackage.WriteUpdatedMarker(AppSettings.UpdatedMarkerPath, staged.Tag, staged.Version);   // the new copy says so, once
         try
         {
             using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\G923Mapper", writable: true);
@@ -397,6 +424,7 @@ public partial class App : Application
             StagedUpdate? staged = UpdatePackage.ReadStaged(AppSettings.StagedDir);
             if (staged is null) return false;
             if (!UpdatePackage.IsNewer(staged, RunningVersion)) { UpdatePackage.ClearStaged(AppSettings.UpdateDir); return false; }   // already on it
+            if (!AppSettings.Load(1).AutoApplyUpdates) return false;     // the person wants to press Restart now themselves
             string? exe = Environment.ProcessPath;
             if (exe is null || !UpdatePackage.IsInstalledCopy(exe, InstallDir)) return false;
             if (!UpdatePackage.Swap(staged.ExePath, exe, out string problem)) { AppLog.Warn("Update at start-up: " + problem); return false; }
@@ -414,7 +442,7 @@ public partial class App : Application
     /// <summary>When the app closes: swap in an update that is waiting, so the next start is the new version.</summary>
     private void ApplyStagedAtExit()
     {
-        if (_instance != 1) return;
+        if (_instance != 1 || _services?.Settings.AutoApplyUpdates == false) return;
         try
         {
             StagedUpdate? staged = UpdatePackage.ReadStaged(AppSettings.StagedDir);
@@ -673,3 +701,4 @@ public partial class App : Application
         });
     }
 }
+

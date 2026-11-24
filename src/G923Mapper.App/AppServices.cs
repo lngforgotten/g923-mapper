@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Threading.Tasks;
 
 namespace G923Mapper.App;
@@ -31,6 +31,8 @@ public sealed class AppServices
     public Action? UpdateChanged { get; set; }
     /// <summary>Where the update is: found, being downloaded, ready to swap in, or the download failed.</summary>
     public UpdatePhase UpdatePhase { get; set; }
+    /// <summary>The version the app has just updated itself to (set for the first run of the new copy), so Home can say so; empty otherwise.</summary>
+    public string JustUpdatedTag { get; set; } = "";
     public int UpdatePercent { get; set; }
     public string UpdateProblem { get; set; } = "";
     /// <summary>Download the new version now and restart into it (the "Install now" button).</summary>
@@ -88,3 +90,4 @@ public sealed class AppServices
         return result;
     }
 }
+

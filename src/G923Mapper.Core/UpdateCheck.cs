@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 using System.Text.RegularExpressions;
 
 namespace G923Mapper;
@@ -20,6 +20,12 @@ public static partial class UpdateCheck
 
     [GeneratedRegex(@"\d+(\.\d+){0,3}")]
     private static partial Regex VersionNumber();
+
+    /// <summary>Where updates come from unless the person says otherwise.</summary>
+    public const string DefaultRepo = "lngforgotten/g923-mapper";
+
+    /// <summary>The repository to use for the text in the "Updates from" box: the default one when the box is empty, otherwise what was typed.</summary>
+    public static string RepoOrDefault(string? text) => string.IsNullOrWhiteSpace(text) ? DefaultRepo : text.Trim();
 
     /// <summary>"owner/name" from "owner/name" or a github.com address; null if it is neither.</summary>
     public static string? NormaliseRepo(string? text)
@@ -78,3 +84,4 @@ public static partial class UpdateCheck
         }
     }
 }
+

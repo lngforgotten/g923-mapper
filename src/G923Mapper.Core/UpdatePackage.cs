@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO.Compression;
 using System.Security.Cryptography;
 using System.Text.Json;
@@ -172,6 +172,42 @@ public static class UpdatePackage
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
+    // ---------------------------------------------------------------- telling the person afterwards
+
+    /// <summary>Leave a note that the app has just updated itself to this version, for the new copy to say so once when it starts.</summary>
+    public static void WriteUpdatedMarker(string path, string tag, Version version)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? ".");
+            File.WriteAllText(path, JsonSerializer.Serialize(new { tag, version = version.ToString() }));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+    }
+
+    /// <summary>
+    /// The tag of the version the app has just updated itself to, if there is a note and it is for the version that is running now, and the note
+    /// is removed either way so it is said once. Null when there is nothing to say (no note, or one left over from some other version).
+    /// </summary>
+    public static string? TakeUpdatedMarker(string path, Version running)
+    {
+        try
+        {
+            if (!File.Exists(path)) return null;
+            using var doc = JsonDocument.Parse(File.ReadAllText(path));
+            string? tag = doc.RootElement.GetProperty("tag").GetString();
+            bool ok = Version.TryParse(doc.RootElement.GetProperty("version").GetString(), out var v)
+                      && v.Major == running.Major && v.Minor == running.Minor && Math.Max(0, v.Build) == Math.Max(0, running.Build);
+            try { File.Delete(path); } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            return ok && !string.IsNullOrWhiteSpace(tag) ? tag : null;
+        }
+        catch (Exception ex) when (ex is JsonException or IOException or KeyNotFoundException or InvalidOperationException or UnauthorizedAccessException)
+        {
+            try { File.Delete(path); } catch (Exception) { }
+            return null;
+        }
+    }
+
     // ---------------------------------------------------------------- swapping it in
 
     /// <summary>Only a copy installed where the installer puts it is ever replaced, never a build someone is running from a folder.</summary>
@@ -239,3 +275,4 @@ public static class UpdatePackage
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 }
+

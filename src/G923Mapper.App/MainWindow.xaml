@@ -1,4 +1,4 @@
-<Window x:Class="G923Mapper.App.MainWindow"
+﻿<Window x:Class="G923Mapper.App.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:G923Mapper.App"
@@ -23,19 +23,16 @@
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
                 <Ellipse x:Name="StatusDot" Width="14" Height="14" Fill="{DynamicResource Neutral}" VerticalAlignment="Top" Margin="0,5,12,0" />
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock x:Name="StatusTitle" FontSize="17" FontWeight="SemiBold" Text="Starting…" TextTrimming="CharacterEllipsis" />
                     <TextBlock x:Name="StatusDetail" Style="{StaticResource Muted}" Margin="0,2,0,0" />
-                    <StackPanel x:Name="UpdatePanel" Orientation="Horizontal" Margin="0,8,0,0" Visibility="Collapsed">
-                        <TextBlock x:Name="UpdateText" Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="560" />
-                        <Button x:Name="UpdateActionButton" Content="Install now" Style="{StaticResource Primary}" Padding="12,4" Margin="12,0,0,0" Click="UpdateAction_Click" />
-                        <Button x:Name="UpdateNotesButton" Content="What's new" Style="{StaticResource Secondary}" Padding="12,4" Margin="6,0,0,0" Click="UpdateDownload_Click"
-                                ToolTip="Open the release page on GitHub." />
-                        <Button x:Name="UpdateLaterButton" Content="Later" Style="{StaticResource Secondary}" Padding="12,4" Margin="6,0,0,0" Click="UpdateLater_Click"
-                                ToolTip="Hide this until an even newer version comes out." />
-                    </StackPanel>
                 </StackPanel>
+
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="HealthButton" Style="{StaticResource Secondary}" Margin="0,0,8,0" Padding="12,8" Click="Health_Click"
                             AutomationProperties.Name="Health check"
@@ -43,7 +40,14 @@
                     <Button x:Name="SettingsButton" Content="Settings" Style="{StaticResource Secondary}" Margin="0,0,8,0" Padding="14,8" Click="Settings_Click" />
                     <Button x:Name="ToggleButton" Style="{StaticResource Primary}" Content="Stop" MinWidth="84" Click="ToggleButton_Click" />
                 </StackPanel>
-            </Grid>
+                <WrapPanel x:Name="UpdatePanel" Grid.Row="1" Grid.ColumnSpan="3" Margin="26,10,0,0" Visibility="Collapsed">
+                    <TextBlock x:Name="UpdateText" Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,12,4" />
+                    <Button x:Name="UpdateActionButton" Content="Install now" Style="{StaticResource Primary}" Padding="12,4" Margin="0,0,6,4" Click="UpdateAction_Click" />
+                    <Button x:Name="UpdateNotesButton" Content="What's new" Style="{StaticResource Secondary}" Padding="12,4" Margin="0,0,6,4" Click="UpdateDownload_Click"
+                            ToolTip="Open the release page on GitHub." />
+                    <Button x:Name="UpdateLaterButton" Content="Later" Style="{StaticResource Secondary}" Padding="12,4" Margin="0,0,0,4" Click="UpdateLater_Click"
+                            ToolTip="Hide this until an even newer version comes out." />
+                </WrapPanel>            </Grid>
         </Border>
 
         <!-- Body: tabs -->
@@ -234,3 +238,4 @@
         </Border>
     </Grid>
 </Window>
+

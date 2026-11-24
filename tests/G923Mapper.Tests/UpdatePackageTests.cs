@@ -322,3 +322,40 @@ public class UpdatePackageTests : IDisposable
         UpdatePackage.CleanOld(P("nowhere\\G923Mapper.exe"));       // harmless
     }
 }
+
+public class UpdatedMarkerTests : IDisposable
+{
+    private readonly string _dir = Path.Combine(Path.GetTempPath(), "g923-marker-" + Guid.NewGuid().ToString("N"));
+    public UpdatedMarkerTests() => Directory.CreateDirectory(_dir);
+    public void Dispose() { try { Directory.Delete(_dir, true); } catch (IOException) { } }
+
+    private string Marker => Path.Combine(_dir, "just-updated.json");
+
+    [Fact]
+    public void The_new_copy_says_so_once_for_the_version_it_is()
+    {
+        UpdatePackage.WriteUpdatedMarker(Marker, "v1.3.2", new Version(1, 3, 2));
+        Assert.Equal("v1.3.2", UpdatePackage.TakeUpdatedMarker(Marker, new Version(1, 3, 2, 0)));
+        Assert.False(File.Exists(Marker));
+        Assert.Null(UpdatePackage.TakeUpdatedMarker(Marker, new Version(1, 3, 2)));      // not again
+    }
+
+    [Fact]
+    public void A_note_left_over_from_another_version_is_dropped_without_being_said()
+    {
+        UpdatePackage.WriteUpdatedMarker(Marker, "v1.3.2", new Version(1, 3, 2));
+        Assert.Null(UpdatePackage.TakeUpdatedMarker(Marker, new Version(1, 3, 0)));       // the swap did not happen, or it was rolled back
+        Assert.False(File.Exists(Marker));
+    }
+
+    [Fact]
+    public void No_note_or_a_damaged_one_says_nothing_and_does_not_throw()
+    {
+        Assert.Null(UpdatePackage.TakeUpdatedMarker(Marker, new Version(1, 3, 2)));
+        File.WriteAllText(Marker, "{ nope");
+        Assert.Null(UpdatePackage.TakeUpdatedMarker(Marker, new Version(1, 3, 2)));
+        Assert.False(File.Exists(Marker));
+        File.WriteAllText(Marker, """{ "tag": "v9", "version": "x" }""");
+        Assert.Null(UpdatePackage.TakeUpdatedMarker(Marker, new Version(9, 0, 0)));
+    }
+}

@@ -1,4 +1,4 @@
-<Window x:Class="G923Mapper.App.SettingsWindow"
+﻿<Window x:Class="G923Mapper.App.SettingsWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:G923Mapper.App"
@@ -162,10 +162,16 @@
                         </Grid>
                         <StackPanel x:Name="CurvePanel" Margin="0,10,0,0" Visibility="Collapsed">
                             <Grid>
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="220" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
-                                <TextBlock Text="Car" VerticalAlignment="Center" />
-                                <ComboBox x:Name="CentringPresetBox" Grid.Column="1" SelectionChanged="CentringPreset_Changed"
-                                          ToolTip="A starting point for the shape and strength. Change any slider afterwards and it becomes Custom." />
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <TextBlock Text="Car" VerticalAlignment="Top" Margin="0,6,0,0" />
+                                <WrapPanel Grid.Column="1">
+                                    <ComboBox x:Name="CentringPresetBox" Width="220" Margin="0,0,8,4" SelectionChanged="CentringPreset_Changed"
+                                              ToolTip="A starting point for the shape and strength. Change any slider afterwards and it becomes Custom. Your own saved presets are listed after the built-in ones." />
+                                    <Button x:Name="SavePresetButton" Content="Save as mine..." Style="{StaticResource Secondary}" Margin="0,0,6,4" Click="SavePreset_Click"
+                                            ToolTip="Keep the current curve under a name you choose, for one game or one kind of vehicle." />
+                                    <Button x:Name="DeletePresetButton" Content="Delete" Style="{StaticResource Secondary}" Margin="0,0,0,4" Click="DeletePreset_Click"
+                                            ToolTip="Delete the saved preset that is selected. The built-in ones cannot be deleted." />
+                                </WrapPanel>
                             </Grid>
                             <TextBlock x:Name="CurveCaption" Style="{StaticResource Muted}" Margin="0,10,0,4" />
                             <local:CentringGraph x:Name="CurveGraph" Height="150" />
@@ -206,16 +212,16 @@
                             </Grid>
                             <CheckBox x:Name="ReversedBox" Content="This wheel pushes the other way round" Margin="0,12,0,0" Checked="Reversed_Changed" Unchecked="Reversed_Changed"
                                       ToolTip="Measure wheel sets this by itself. If the wheel is pushed away from the middle instead of towards it, or swings left and right, tick or untick this." />
-                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                            <WrapPanel Margin="0,12,0,0">
                                 <Button x:Name="MeasureButton" Content="Measure wheel" Style="{StaticResource Secondary}" VerticalAlignment="Top" Click="Measure_Click"
                                         ToolTip="Take your hands off the wheel first. The force is raised very slowly until the wheel starts to turn; that gives the least pull and which way this wheel pushes. The curve only runs on a wheel that has been measured." />
                                 <TextBlock x:Name="MeasureStatus" Style="{StaticResource Muted}" VerticalAlignment="Top" Margin="14,6,0,0" TextWrapping="Wrap" MaxWidth="380" />
-                            </StackPanel>
-                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                            </WrapPanel>
+                            <WrapPanel Margin="0,8,0,0">
                                 <Button x:Name="TraceButton" Content="Record 10 seconds" Style="{StaticResource Secondary}" VerticalAlignment="Top" Click="Trace_Click"
                                         ToolTip="Records where the wheel is and the force being sent for ten seconds, saved as a file in the log folder with a one-line verdict (settled, or keeps swinging). Start it, give the wheel a small nudge, and let go." />
                                 <TextBlock x:Name="TraceStatus" Style="{StaticResource Muted}" VerticalAlignment="Top" Margin="14,6,0,0" TextWrapping="Wrap" MaxWidth="380" />
-                            </StackPanel>
+                            </WrapPanel>
                             <TextBlock Style="{StaticResource Hint}"
                                        Text="Logitech G HUB has a centring spring of its own, which adds to this curve and can disturb the measurement. For the cleanest result turn it off in G HUB (the wheel's settings there) while you use the curve. If the wheel swings left and right after measuring, raise Damping a little, lower the strength, or flip the checkbox above." />
                         </StackPanel>
@@ -231,10 +237,10 @@
                             <ComboBox x:Name="StyleBox" Grid.Column="1" SelectionChanged="Style_Changed"
                                       ToolTip="Smooth is a hum, Sharp a hard buzz, Rough a rattle. Changing it reconnects the wheel for a moment." />
                         </Grid>
-                        <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                        <WrapPanel Margin="0,14,0,0">
                             <Button x:Name="TestForceButton" Content="Test vibration" Style="{StaticResource Secondary}" Click="TestForce_Click" />
                             <TextBlock x:Name="FfbStatus" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="14,0,0,0" />
-                        </StackPanel>
+                        </WrapPanel>
                         <TextBlock Style="{StaticResource Hint}"
                                    Text="The spring gently pulls the wheel back to centre; it starts at 0 so nothing surprises you. Force feedback needs exclusive access to the wheel, so close Logitech G HUB if it will not start. These are the defaults: a profile (or a mode in it) that has its own feel (Edit rules, Feel) uses that instead while it is active, so if a slider here seems to do nothing, check that profile's own feel." />
                     </StackPanel>
@@ -297,20 +303,22 @@
                             <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                             <TextBlock Text="Updates from" VerticalAlignment="Center" />
                             <TextBox x:Name="UpdateRepoBox" Grid.Column="1" Padding="6,4" TextChanged="UpdateRepo_Changed"
-                                     ToolTip="A GitHub repository such as owner/name. Leave empty and the app never looks anything up." />
+                                     ToolTip="A GitHub repository such as owner/name. Leave it empty to use the default, lngforgotten/g923-mapper. To stop the app looking anything up, untick the automatic check below and do not press Check for updates." />
                             <Button x:Name="UpdateButton" Grid.Column="2" Content="Check for updates" Style="{StaticResource Secondary}" Margin="8,0,0,0" Click="CheckUpdate_Click" />
                         </Grid>
-                        <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                        <WrapPanel Margin="0,8,0,0">
                             <TextBlock x:Name="UpdateMessage" Style="{StaticResource Muted}" VerticalAlignment="Center" TextWrapping="Wrap" />
                             <Button x:Name="UpdateInstallButton" Content="Install now" Style="{StaticResource Primary}" Margin="12,0,0,0" Visibility="Collapsed" Click="InstallUpdate_Click"
                                     ToolTip="Download the new version, then restart into it." />
                             <Button x:Name="UpdateOpenButton" Content="Release page" Style="{StaticResource Secondary}" Margin="8,0,0,0" Visibility="Collapsed" Click="OpenUpdate_Click" />
-                        </StackPanel>
-                        <CheckBox x:Name="AutoUpdateBox" Content="Check for updates automatically (once a day)" Margin="0,10,0,0" Checked="AutoUpdate_Changed" Unchecked="AutoUpdate_Changed" />
+                        </WrapPanel>
+                        <CheckBox x:Name="AutoUpdateBox" Content="Check for updates automatically (at every start)" Margin="0,10,0,0" Checked="AutoUpdate_Changed" Unchecked="AutoUpdate_Changed" />
                         <CheckBox x:Name="AutoInstallBox" Content="Install new versions automatically" Margin="0,8,0,0" Checked="AutoInstall_Changed" Unchecked="AutoInstall_Changed"
                                   ToolTip="Download a new version in the background and put it in place the next time the app starts. Home also offers Restart now." />
+                        <CheckBox x:Name="AutoApplyBox" Content="Put a downloaded version in place by itself (next start or when the app closes)" Margin="22,6,0,0" Checked="AutoApply_Changed" Unchecked="AutoApply_Changed"
+                                  ToolTip="Untick to be asked first: the new version is still downloaded, but waits for the Restart now button on Home." />
                         <TextBlock Style="{StaticResource Hint}"
-                                   Text="One request to GitHub for that repository's latest release, a little after start-up and about once a day, with no personal information. With automatic installing on, a new version is downloaded in the background, checked against the checksum GitHub publishes for it, and put in place the next time the app starts (or when you press Restart now on Home); your profiles and settings are kept. Untick it and Home only offers the new version; untick the check as well and the app only looks when you press the button. A copy that is not installed with Setup is never replaced." />
+                                   Text="One request to GitHub for that repository's latest release, a few seconds after every start-up and about every six hours while the app keeps running, with no personal information. With automatic installing on, a new version is downloaded in the background, checked against the checksum GitHub publishes for it, and put in place the next time the app starts (or when you press Restart now on Home); your profiles and settings are kept. Untick it and Home only offers the new version; untick the check as well and the app only looks when you press the button. A copy that is not installed with Setup is never replaced." />
                         <TextBlock Style="{StaticResource Hint}"
                                    Text="Everything runs on this PC. The app only creates a virtual controller from outside your games; it never touches a game's files or memory." />
                     </StackPanel>
@@ -323,3 +331,9 @@
         </StackPanel>
     </Grid>
 </Window>
+
+
+
+
+
+

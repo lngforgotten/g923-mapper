@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -44,7 +44,7 @@ public sealed class AppSettings
     /// A GitHub repository ("owner/name") whose releases to compare with, when the user presses Check for updates. Empty (the default) means the
     /// app never contacts anything. It is never checked automatically.
     /// </summary>
-    public string UpdateRepo { get; set; } = "lngforgotten/g923-mapper";
+    public string UpdateRepo { get; set; } = UpdateCheck.DefaultRepo;
     /// <summary>The user has finished (or dismissed for good) the "Get started" checklist.</summary>
     public bool SetupDone { get; set; }
     /// <summary>True when there was no settings file yet, so this is the first time the app has run for this user. Not stored.</summary>
@@ -76,11 +76,18 @@ public sealed class AppSettings
     public bool ModeToast { get; set; } = true;
     /// <summary>Which view the pop-out window was last in: Full, Compact, Mode, Controller or Rules.</summary>
     public string MiniView { get; set; } = "Full";
-    /// <summary>Look for a new version by itself, quietly, a little after start-up and about once a day. On by default; one tick in Settings turns it off.</summary>
+    /// <summary>Look for a new version by itself, quietly, a few seconds after every start-up and about every six hours while running. On by default; one tick in Settings turns it off.</summary>
     public bool AutoUpdateCheck { get; set; } = true;
     /// <summary>When a new version is found, download and install it by itself (it takes effect the next time the app starts, or when asked to restart). On by default.</summary>
     public bool AutoInstallUpdates { get; set; } = true;
-    /// <summary>When the last automatic check reached GitHub (UTC, ISO text), so it runs about once a day and not on every start.</summary>
+    /// <summary>
+    /// A downloaded new version is put in place by itself (the next time the app starts or when it closes). Switch it off and the version waits
+    /// for the Restart now button on Home instead. Only matters while <see cref="AutoInstallUpdates"/> is on.
+    /// </summary>
+    public bool AutoApplyUpdates { get; set; } = true;
+    /// <summary>Centring curve presets the person saved under their own names (see Settings, Force feedback, Car).</summary>
+    public System.Collections.Generic.List<CentringPreset> CentringPresets { get; set; } = new();
+    /// <summary>When the last automatic check reached GitHub (UTC, ISO text), so closing and reopening the app within a few minutes does not ask again.</summary>
     public string LastUpdateCheckUtc { get; set; } = "";
     /// <summary>The version the user told Home to stop showing ("Later"); a newer one shows again.</summary>
     public string UpdateDismissedTag { get; set; } = "";
@@ -113,6 +120,8 @@ public sealed class AppSettings
     /// <summary>Where a downloaded update waits (the unpacked program and a note of its version) until it is swapped in.</summary>
     public static string UpdateDir => Path.Combine(AppDataDir, "update");
     public static string StagedDir => Path.Combine(UpdateDir, "staged");
+    /// <summary>A note left by an update that has just swapped itself in, so the new copy can say so once.</summary>
+    public static string UpdatedMarkerPath => Path.Combine(AppDataDir, "just-updated.json");
 
     public static string AntiCheatPath => Path.Combine(AppDataDir, "anticheat.txt");
 
@@ -143,3 +152,7 @@ public sealed class AppSettings
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 }
+
+
+
+
