@@ -98,7 +98,7 @@ public sealed class AutoProfileSwitcher : IDisposable
     public static Func<IEnumerable<(string Key, Profile Profile)>> FromStore(ProfileStore store) => () =>
         store.Files
             .Select(f => (Key: Path.GetFileNameWithoutExtension(f), Profile: store.Get(f)))
-            .Where(p => p.Profile is not null)
+            .Where(p => p.Profile is not null && !p.Profile.IsTemplate)   // a template is not attached to a game, whatever it lists
             .Select(p => (p.Key, p.Profile!))
             .ToList();
 
@@ -234,11 +234,19 @@ public static class ProfileWriter
     /// Profile as readable JSON in the same layout as the starter profiles: one rule per line, and
     /// only the fields that differ from their defaults. Comments in an original file are not kept.
     /// </summary>
-    public static string ToJson(Profile p)
+    public static string ToJson(Profile p) => p.Parent is not null ? Templates.ChildJson(p) : PlainJson(p);
+
+    /// <summary>
+    /// The profile with every setting and rule written out, never in the form that stores only differences from a template. What is shared, copied
+    /// and checked; a profile with a template is written to its file with <see cref="ToJson"/>.
+    /// </summary>
+    public static string PlainJson(Profile p)
     {
         var sb = new StringBuilder();
         sb.AppendLine("{");
         sb.AppendLine($"  \"name\": {Str(p.Name)},");
+        if (!string.IsNullOrWhiteSpace(p.Notes)) sb.AppendLine($"  \"notes\": {Str(p.Notes.Trim())},");
+        if (p.IsTemplate) sb.AppendLine("  \"isTemplate\": true,");
         if (p.Match.Exe.Count > 0)
             sb.AppendLine($"  \"match\": {{ \"exe\": [{string.Join(", ", p.Match.Exe.Select(Str))}] }},");
         sb.AppendLine($"  \"device\": {Str(p.Device)},");
@@ -250,18 +258,49 @@ public static class ProfileWriter
             var parts = new List<string>();
             if (force.Rumble is int rumble) parts.Add($"\"rumble\": {rumble}");
             if (force.Spring is int spring) parts.Add($"\"spring\": {spring}");
+            if (force.Friction is int friction) parts.Add($"\"friction\": {friction}");
             if (force.Motors is { } motors) parts.Add($"\"motors\": {Str(motors.ToLowerInvariant())}");
             sb.AppendLine($"  \"force\": {{ {string.Join(", ", parts)} }},");
         }
         sb.AppendLine("  \"rules\": [");
         for (int i = 0; i < p.Rules.Count; i++)
-            sb.AppendLine("    " + RuleJson(p.Rules[i]) + (i < p.Rules.Count - 1 ? "," : ""));
-        sb.AppendLine("  ]");
+            sb.AppendLine("    " + RuleText(p.Rules[i]) + (i < p.Rules.Count - 1 ? "," : ""));
+        sb.AppendLine(p.Modes.Count > 0 ? "  ]," : "  ]");
+        if (p.Modes.Count > 0) AppendModes(sb, p);
         sb.AppendLine("}");
         return sb.ToString();
     }
 
-    private static string RuleJson(Rule r)
+    /// <summary>The "modes" array, as the last thing in the file.</summary>
+    internal static void AppendModes(StringBuilder sb, Profile p)
+    {
+        sb.AppendLine("  \"modes\": [");
+        for (int i = 0; i < p.Modes.Count; i++)
+        {
+            ProfileMode m = p.Modes[i];
+            sb.AppendLine("    {");
+            sb.AppendLine($"      \"name\": {Str(m.Name)},");
+            if (m.Force is { IsEmpty: false } f)
+            {
+                var parts = new List<string>();
+                if (f.Rumble is int ru) parts.Add($"\"rumble\": {ru}");
+                if (f.Spring is int sp) parts.Add($"\"spring\": {sp}");
+                if (f.Friction is int fr) parts.Add($"\"friction\": {fr}");
+                if (f.Motors is { } mo) parts.Add($"\"motors\": {Str(mo.ToLowerInvariant())}");
+                sb.AppendLine($"      \"force\": {{ {string.Join(", ", parts)} }},");
+            }
+            if (m.RemovedRules is { Count: > 0 } removed) sb.AppendLine($"      \"removedRules\": [{string.Join(", ", removed.Select(Str))}],");
+            sb.AppendLine("      \"rules\": [");
+            for (int j = 0; j < m.Rules.Count; j++)
+                sb.AppendLine("        " + RuleText(m.Rules[j]) + (j < m.Rules.Count - 1 ? "," : ""));
+            sb.AppendLine("      ]");
+            sb.AppendLine("    }" + (i < p.Modes.Count - 1 ? "," : ""));
+        }
+        sb.AppendLine("  ]");
+    }
+
+    /// <summary>One rule as a line of JSON, with only the fields that differ from their defaults.</summary>
+    public static string RuleText(Rule r)
     {
         var parts = new List<string> { $"\"from\": {Str(r.From)}", $"\"to\": {Str(r.To)}", $"\"curve\": {Str(r.Curve.ToLowerInvariant())}" };
         bool expo = r.Curve.Equals("expo", StringComparison.OrdinalIgnoreCase);

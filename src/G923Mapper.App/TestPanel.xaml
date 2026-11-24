@@ -1,0 +1,61 @@
+<UserControl x:Class="G923Mapper.App.TestPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:G923Mapper.App">
+    <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel>
+            <!-- The switch -->
+            <Border Style="{StaticResource Card}">
+                <StackPanel>
+                    <TextBlock Text="TEST MODE" Style="{StaticResource Caption}" />
+                    <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap"
+                               Text="Check a profile without starting a game. With output paused the games see a neutral controller (nothing pressed, wheel centred), while everything below keeps showing what the profile would send as you move the wheel and pedals." />
+                    <CheckBox x:Name="PauseBox" Margin="0,10,0,0" Content="Pause output to the virtual controller" Click="Pause_Click" />
+                    <TextBlock x:Name="TxtState" Margin="0,6,0,0" TextWrapping="Wrap" />
+                    <TextBlock x:Name="TxtMode" Margin="0,6,0,0" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource Accent}" Visibility="Collapsed" />
+                </StackPanel>
+            </Border>
+
+            <!-- The wheel -->
+            <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock Text="THE WHEEL AND PEDALS" Style="{StaticResource Caption}" />
+                    <Grid Margin="0,4,0,10">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="100" /><ColumnDefinition Width="*" /><ColumnDefinition Width="150" /></Grid.ColumnDefinitions>
+                        <TextBlock Text="Steering" VerticalAlignment="Center" />
+                        <local:CentreBar x:Name="BarSteer" Grid.Column="1" Bipolar="True" />
+                        <TextBlock x:Name="TxtSteer" Grid.Column="2" Style="{StaticResource ValueText}" HorizontalAlignment="Right" />
+                    </Grid>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" /><ColumnDefinition Width="14" /><ColumnDefinition Width="*" /><ColumnDefinition Width="14" /><ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <DockPanel><TextBlock x:Name="TxtThrottle" DockPanel.Dock="Right" Style="{StaticResource ValueText}" /><TextBlock Text="Throttle" /></DockPanel>
+                            <local:CentreBar x:Name="BarThrottle" Margin="0,4,0,0" Fill="{DynamicResource Success}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="2">
+                            <DockPanel><TextBlock x:Name="TxtBrake" DockPanel.Dock="Right" Style="{StaticResource ValueText}" /><TextBlock Text="Brake" /></DockPanel>
+                            <local:CentreBar x:Name="BarBrake" Margin="0,4,0,0" Fill="{DynamicResource Danger}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="4">
+                            <DockPanel><TextBlock x:Name="TxtClutch" DockPanel.Dock="Right" Style="{StaticResource ValueText}" /><TextBlock Text="Clutch" /></DockPanel>
+                            <local:CentreBar x:Name="BarClutch" Margin="0,4,0,0" Fill="{DynamicResource Warn}" />
+                        </StackPanel>
+                    </Grid>
+                </StackPanel>
+            </Border>
+
+            <!-- Each rule -->
+            <Border Style="{StaticResource Card}" Margin="0,12,0,0">
+                <StackPanel>
+                    <TextBlock x:Name="TxtRulesTitle" Text="WHAT EACH RULE DOES" Style="{StaticResource Caption}" />
+                    <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,0,0,8"
+                               Text="Axis rules: the bar is the output, the white tick is the input. Button and key rules: the bar is the input, the white tick is where it triggers (the threshold), it turns green once past it, and the dot is lit while the button is down (a toggle or pulse can differ from the input)." />
+                    <Grid x:Name="RuleGrid" />
+                    <TextBlock x:Name="TxtInactive" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,10,0,0" />
+                </StackPanel>
+            </Border>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>

@@ -4,6 +4,27 @@ using System.Windows.Input;
 
 namespace G923Mapper.App;
 
+/// <summary>The one-time warning before a profile is switched to Standard safety, shared by everything that can do it.</summary>
+internal static class SafetyPrompts
+{
+    /// <summary>
+    /// True when switching a profile to Standard may go ahead: the user has already accepted the warning once, or accepts it now (and is not
+    /// asked again). False if they decline.
+    /// </summary>
+    public static bool ConfirmStandard(Window owner, AppSettings? settings)
+    {
+        if (settings?.WarnedAboutStandard == true) return true;
+        var answer = MessageBox.Show(owner,
+            "Standard mode allows extras such as keyboard output, which synthetic key presses can look like automation to anti-cheat. " +
+            "It is meant for offline and single-player games. Do not use it for a game with online play or anti-cheat (for example GTA Online).\n\n" +
+            "Switch this profile to Standard?",
+            "Switch to Standard", MessageBoxButton.OKCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel);
+        if (answer != MessageBoxResult.OK) return false;
+        if (settings is not null) { settings.WarnedAboutStandard = true; settings.Save(); }
+        return true;
+    }
+}
+
 /// <summary>A tiny "type a value" dialog, built in code to avoid another XAML file.</summary>
 internal static class Prompt
 {

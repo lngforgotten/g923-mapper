@@ -9,15 +9,17 @@ public sealed class HotkeyManager : IDisposable
 {
     private const int WmHotkey = 0x0312;
     private const uint ModNoRepeat = 0x4000;   // holding the keys does not fire again and again
-    private const int Id = 0x6923;
+    private readonly int _id;
 
     private readonly IntPtr _hwnd;
     private readonly HwndSource? _source;
     private readonly Action _pressed;
     private bool _registered;
 
-    public HotkeyManager(IntPtr hwnd, Action pressed)
+    /// <param name="id">Which shortcut this is to Windows; every manager in the program needs its own.</param>
+    public HotkeyManager(IntPtr hwnd, Action pressed, int id = 0x6923)
     {
+        _id = id;
         _hwnd = hwnd;
         _pressed = pressed;
         _source = HwndSource.FromHwnd(hwnd);
@@ -32,21 +34,21 @@ public sealed class HotkeyManager : IDisposable
     {
         Unregister();
         // HotkeyModifiers uses the same bit values as Windows (Alt 1, Ctrl 2, Shift 4, Win 8).
-        _registered = RegisterHotKey(_hwnd, Id, (uint)hotkey.Modifiers | ModNoRepeat, (uint)hotkey.VirtualKey);
+        _registered = RegisterHotKey(_hwnd, _id, (uint)hotkey.Modifiers | ModNoRepeat, (uint)hotkey.VirtualKey);
         Current = _registered ? hotkey : null;
         return _registered;
     }
 
     public void Unregister()
     {
-        if (_registered) UnregisterHotKey(_hwnd, Id);
+        if (_registered) UnregisterHotKey(_hwnd, _id);
         _registered = false;
         Current = null;
     }
 
     private IntPtr Hook(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
     {
-        if (msg == WmHotkey && wParam.ToInt32() == Id)
+        if (msg == WmHotkey && wParam.ToInt32() == _id)
         {
             handled = true;
             _pressed();

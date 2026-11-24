@@ -95,13 +95,13 @@ public partial class DevicesPanel : UserControl
             return;
         }
 
-        Profile? shown = _s.Store.Get(snap.ProfileName);
+        Profile? shown = RunningProfile.Of(_s.Store, snap);   // the profile with its active mode laid over it
         PadKind padKind = shown is not null ? PadKinds.Of(shown) : PadKind.Xbox360;
         Pad.Set(snap.Pad, padKind);
-        if (_tipsVersion != _s.Store.Version || _tipsProfile != snap.ProfileName)
+        if (_tipsVersion != _s.Store.Version || _tipsProfile != snap.ProfileName + "|" + snap.ModeName)
         {
             _tipsVersion = _s.Store.Version;
-            _tipsProfile = snap.ProfileName;
+            _tipsProfile = snap.ProfileName + "|" + snap.ModeName;
             Pad.SetTips(PadTips.For(shown, padKind));
             Pad.SetLabels(shown is null ? new Dictionary<string, string>() : PadControls.Labels(shown));
             _flows = shown is null ? [] : PadControls.Flows(shown);

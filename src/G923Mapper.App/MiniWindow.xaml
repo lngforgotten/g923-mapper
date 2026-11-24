@@ -2,23 +2,45 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:G923Mapper.App"
-        Title="G923 Mapper (mini)" Width="340" SizeToContent="Height" ResizeMode="CanMinimize" Topmost="True"
+        Title="G923 Mapper (pop-out)" Width="340" Height="460" MinWidth="200" MinHeight="90" ResizeMode="CanResizeWithGrip" Topmost="True"
         WindowStartupLocation="Manual" Background="{DynamicResource WindowBack}" FontFamily="Segoe UI" FontSize="12"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
-    <StackPanel Margin="12">
+    <Grid Margin="12">
+        <Grid.RowDefinitions>
+            <RowDefinition x:Name="RowHeader" Height="Auto" />
+            <RowDefinition x:Name="RowMode" Height="Auto" />
+            <RowDefinition x:Name="RowPad" Height="Auto" />
+            <RowDefinition x:Name="RowSteer" Height="Auto" />
+            <RowDefinition x:Name="RowPedals" Height="Auto" />
+            <RowDefinition x:Name="RowRules" Height="0" />
+        </Grid.RowDefinitions>
+
+        <!-- Always there: which profile, which view, and whether to stay on top -->
         <DockPanel Margin="0,0,0,6">
-            <CheckBox x:Name="OnTopBox" DockPanel.Dock="Right" Content="On top" IsChecked="True" Click="OnTop_Click" />
+            <CheckBox x:Name="OnTopBox" DockPanel.Dock="Right" Content="On top" IsChecked="True" Click="OnTop_Click" Margin="8,0,0,0" VerticalAlignment="Center" />
+            <ComboBox x:Name="ViewBox" DockPanel.Dock="Right" Width="108" SelectionChanged="View_Changed" FontSize="11.5" VerticalAlignment="Center"
+                      ToolTip="Full: everything. Compact: mode and bars. Mode: just the mode name, large. Controller: the picture. Rules: a gauge for each active rule." />
             <Ellipse x:Name="Dot" Width="10" Height="10" Fill="{DynamicResource Neutral}" Margin="0,0,8,0" VerticalAlignment="Center" />
             <TextBlock x:Name="TxtProfile" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
         </DockPanel>
-        <local:PadDiagram x:Name="Pad" Width="316" Height="190" HorizontalAlignment="Center" />
-        <Grid Margin="0,8,0,6">
+
+        <!-- The mode, scaled to the room it is given -->
+        <Viewbox x:Name="ModeBox" Grid.Row="1" Stretch="Uniform" Margin="0,0,0,4" Visibility="Collapsed">
+            <TextBlock x:Name="TxtMode" FontSize="22" FontWeight="Bold" Foreground="{DynamicResource Accent}" />
+        </Viewbox>
+
+        <Viewbox x:Name="PadBox" Grid.Row="2" Stretch="Uniform">
+            <local:PadDiagram x:Name="Pad" Width="316" Height="190" />
+        </Viewbox>
+
+        <Grid x:Name="SteerRow" Grid.Row="3" Margin="0,8,0,6">
             <Grid.ColumnDefinitions><ColumnDefinition Width="62" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
             <TextBlock Text="Steering" VerticalAlignment="Center" />
             <local:CentreBar x:Name="BarSteer" Grid.Column="1" Bipolar="True" />
             <TextBlock x:Name="TxtSteer" Grid.Column="2" Style="{StaticResource ValueText}" Text="0&#176;" />
         </Grid>
-        <Grid>
+
+        <Grid x:Name="PedalRow" Grid.Row="4">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="*" /><ColumnDefinition Width="8" /><ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
@@ -35,5 +57,10 @@
                 <local:CentreBar x:Name="BarClutch" Margin="0,3,0,0" Fill="{DynamicResource Warn}" />
             </StackPanel>
         </Grid>
-    </StackPanel>
+
+        <!-- One gauge for each active rule -->
+        <ScrollViewer x:Name="RuleScroll" Grid.Row="5" VerticalScrollBarVisibility="Auto" Visibility="Collapsed">
+            <Grid x:Name="RuleGrid" />
+        </ScrollViewer>
+    </Grid>
 </Window>

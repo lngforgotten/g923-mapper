@@ -43,7 +43,7 @@
                     <ColumnDefinition Width="Auto" /><ColumnDefinition Width="1.3*" />
                 </Grid.ColumnDefinitions>
                 <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
                 </Grid.RowDefinitions>
                 <TextBlock Text="Name" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
                 <TextBox x:Name="NameBox" Grid.Column="1" TextChanged="Profile_Changed" Margin="0,0,16,0" />
@@ -78,6 +78,9 @@
                     <TextBlock Text="Spring" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="12,0,6,0" />
                     <Slider x:Name="FeelSpring" Width="110" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="Feel_Slider" />
                     <TextBlock x:Name="FeelSpringText" Width="40" Style="{StaticResource ValueText}" VerticalAlignment="Center" Margin="6,0,0,0" />
+                    <TextBlock Text="Friction" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="12,0,6,0" />
+                    <Slider x:Name="FeelFriction" Width="90" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="Feel_Slider" />
+                    <TextBlock x:Name="FeelFrictionText" Width="40" Style="{StaticResource ValueText}" VerticalAlignment="Center" Margin="6,0,0,0" />
                     <ComboBox x:Name="FeelMotors" Width="150" Margin="12,0,0,0" VerticalAlignment="Center" SelectionChanged="Profile_Changed"
                               ToolTip="Which of the game's two rumble motors the wheel plays." />
                 </StackPanel>
@@ -87,6 +90,33 @@
                               ToolTip="With HidHide installed, a profile can hide the real wheel from games while its game is running, and give it back afterwards. It never happens just because the profile is selected. Each change asks for administrator permission." />
                     <TextBlock x:Name="HideWheelHint" Style="{StaticResource Hint}" Margin="14,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
+                <WrapPanel x:Name="ModeRow" Grid.Row="7" Grid.ColumnSpan="6" Margin="0,10,0,0">
+                    <TextBlock Text="Editing" Style="{StaticResource FieldLabel}" Margin="0,0,8,4" VerticalAlignment="Center" />
+                    <ComboBox x:Name="ViewBox" Width="270" Margin="0,0,0,4" SelectionChanged="View_Changed"
+                              ToolTip="The profile's own rules apply in every mode. A mode has rules of its own that apply only while it is active and replace the profile's rules for the same output." />
+                    <Button Content="Add mode" Style="{StaticResource Secondary}" Padding="10,4" Margin="10,0,0,4" Click="AddMode_Click"
+                            ToolTip="Add a mode such as Shooting, Driving or Flying to this profile." />
+                    <Button x:Name="RenameModeButton" Content="Rename" Style="{StaticResource Secondary}" Padding="10,4" Margin="6,0,0,4" Click="RenameMode_Click" />
+                    <Button x:Name="DeleteModeButton" Content="Delete mode" Style="{StaticResource Secondary}" Padding="10,4" Margin="6,0,0,4" Click="DeleteMode_Click" />
+                    <Button x:Name="EarlierModeButton" Content="Earlier" Style="{StaticResource Secondary}" Padding="10,4" Margin="6,0,0,4" Click="MoveMode_Click" Tag="-1"
+                            ToolTip="Move this mode earlier in the order. The first mode is the one a profile starts in." />
+                    <Button x:Name="LaterModeButton" Content="Later" Style="{StaticResource Secondary}" Padding="10,4" Margin="6,0,0,4" Click="MoveMode_Click" Tag="1" />
+                    <Button x:Name="TurnedOffButton" Content="Profile rules turned off here" Style="{StaticResource Secondary}" Padding="10,4" Margin="6,0,0,4" Click="TurnedOff_Click"
+                            ToolTip="Tick any of the profile's rules that should not apply while this mode is active." />
+                    <Button x:Name="SwitchRuleButton" Content="Add a switch button" Style="{StaticResource Secondary}" Padding="10,4" Margin="6,0,0,4" Click="SwitchRule_Click"
+                            ToolTip="Add a rule so a wheel button moves to the next mode. Press Learn on the new rule to pick the button." />
+                    <TextBlock x:Name="ModeNote" Style="{StaticResource Hint}" Margin="0,2,0,0" TextWrapping="Wrap" Width="960" />
+                </WrapPanel>
+                <StackPanel x:Name="TemplateRow" Grid.Row="6" Grid.ColumnSpan="6" Orientation="Horizontal" Margin="0,10,0,0" Visibility="Collapsed">
+                    <TextBlock Text="Template" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
+                    <TextBlock x:Name="TemplateInfo" VerticalAlignment="Center" />
+                    <Button x:Name="TemplateMenuButton" Content="Template options" Style="{StaticResource Secondary}" Padding="12,4" Margin="14,0,0,0" Click="TemplateMenu_Click"
+                            ToolTip="See what this profile does its own way, put a rule or setting back to the template's, or take in a changed template." />
+                </StackPanel>
+                <TextBlock Grid.Row="5" Text="Notes" Style="{StaticResource FieldLabel}" Margin="0,10,8,0" VerticalAlignment="Top" />
+                <TextBox x:Name="NotesBox" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="5" Margin="0,10,0,0" Height="50" AcceptsReturn="True" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top" TextChanged="Profile_Changed"
+                         ToolTip="Your own notes about this profile, for example what felt right in the game. Kept in the profile file, its history and exports." />
             </Grid>
         </Border>
 

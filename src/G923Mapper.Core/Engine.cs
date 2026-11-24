@@ -55,6 +55,16 @@ public static class Shaping
 }
 
 /// <summary>Turns normalised inputs into pad output according to a profile. Holds per-rule state for toggle/pulse.</summary>
+/// <summary>One rule's latest result (see <see cref="MappingEngine.Readings"/>).</summary>
+/// <param name="Input">The input as the shaping step sees it, after range, half-axis, expression and invert.</param>
+/// <param name="IsButton">The rule drives a button or key rather than an axis.</param>
+/// <param name="Signed">The input runs from -1 to 1 (the wheel) rather than 0 to 1.</param>
+/// <param name="Output">An axis rule's output, 0 to 1 (or -1 to 1 for a stick); for a button, 1 while it is down and 0 otherwise.</param>
+/// <param name="Over">A button rule's input is past its threshold right now (before toggle, pulse or turbo).</param>
+/// <param name="On">A button rule's button is down right now.</param>
+/// <param name="Threshold">A button rule's trigger point (negative means at or below).</param>
+public readonly record struct RuleReading(Rule Rule, double Input, bool IsButton, bool Signed, double Output, bool Over, bool On, double Threshold);
+
 public sealed class MappingEngine
 {
     private sealed class CompiledRule
@@ -76,6 +86,13 @@ public sealed class MappingEngine
 
     private readonly DeviceMap _device;
     private readonly CompiledRule[] _rules;
+    private readonly RuleReading[] _readings;
+
+    /// <summary>
+    /// What each rule that is in use did on the latest <see cref="Evaluate"/>: its input as the shaping step sees it, its output, and for a button
+    /// whether the input is past the threshold and whether the button is down. A copy, safe to keep. Drives the test page.
+    /// </summary>
+    public RuleReading[] Readings() => (RuleReading[])_readings.Clone();
 
     public Profile Profile { get; }
 
@@ -103,6 +120,7 @@ public sealed class MappingEngine
             });
         }
         _rules = list.ToArray();
+        _readings = new RuleReading[_rules.Length];
     }
 
     private static int PartOf(string? part) =>
@@ -124,20 +142,11 @@ public sealed class MappingEngine
         var state = new PadState();
         PadState? state2 = Profile.Outputs.SecondPad ? new PadState() : null;
 
-        foreach (CompiledRule cr in _rules)
+        for (int ri = 0; ri < _rules.Length; ri++)
         {
+            CompiledRule cr = _rules[ri];
             Rule r = cr.Rule;
-            double v = frame.Get(r.From);
-
-            if (cr.Signed && r.Range is double range)
-                v = Math.Clamp(v * _device.RotationDegrees / range, -1, 1);
-            if (cr.Part != 0) v = HalfAxis(v, cr.Signed, cr.Part);
-            if (cr.Expr is { } expr)
-            {
-                double x = v;
-                v = Math.Clamp(expr.Evaluate(name => name.Equals("x", StringComparison.OrdinalIgnoreCase) ? x : frame.Get(name)), -1, 1);
-            }
-            if (r.Invert) v = cr.Signed ? -v : 1 - v;
+            double v = Prepare(cr, frame);
 
             if (cr.Target.Kind == TargetKind.Axis)
             {
@@ -145,20 +154,78 @@ public sealed class MappingEngine
                 if (cr.SmoothMs > 0) shaped = Smooth(cr, shaped, nowMs);
                 Span<double> into = cr.Target.Pad == 2 ? axes2 : axes;
                 into[(int)cr.Target.Axis] += shaped;
+                _readings[ri] = new RuleReading(r, v, false, cr.Signed, shaped, false, false, 0);
             }
-            else if (EvaluateButton(cr, v, nowMs))
+            else
             {
-                if (cr.Target.Kind == TargetKind.Key)
+                bool wasPressed = cr.Previous;
+                bool down = EvaluateButton(cr, v, nowMs, out bool over);
+                if (cr.Target.Kind == TargetKind.Mode)
                 {
-                    if (KeyNames.Canonical(cr.Target.Key) is string key) state.Keys.Add(key);
+                    // Switching modes is not an output: one request for each press, the moment the input goes past its threshold.
+                    if (over && !wasPressed) _modeRequest = cr.Target.Key;
+                    _readings[ri] = new RuleReading(r, v, true, cr.Signed, over ? 1 : 0, over, over, r.Threshold ?? 0.5);
+                    continue;
                 }
-                else (cr.Target.Pad == 2 ? state2! : state)[cr.Target.Button] = true;
+                _readings[ri] = new RuleReading(r, v, true, cr.Signed, down ? 1 : 0, over, down, r.Threshold ?? 0.5);
+                if (down)
+                {
+                    if (cr.Target.Kind == TargetKind.Key)
+                    {
+                        if (KeyNames.Canonical(cr.Target.Key) is string key) state.Keys.Add(key);
+                    }
+                    else (cr.Target.Pad == 2 ? state2! : state)[cr.Target.Button] = true;
+                }
             }
         }
 
         Fill(state, axes);
         if (state2 is not null) { Fill(state2, axes2); state.Second = state2; }
         return state;
+    }
+
+    /// <summary>A rule's input as the shaping step sees it: after the range, half-axis, expression and invert settings.</summary>
+    private double Prepare(CompiledRule cr, InputFrame frame)
+    {
+        Rule r = cr.Rule;
+        double v = frame.Get(r.From);
+        if (cr.Signed && r.Range is double range)
+            v = Math.Clamp(v * _device.RotationDegrees / range, -1, 1);
+        if (cr.Part != 0) v = HalfAxis(v, cr.Signed, cr.Part);
+        if (cr.Expr is { } expr)
+        {
+            double x = v;
+            v = Math.Clamp(expr.Evaluate(name => name.Equals("x", StringComparison.OrdinalIgnoreCase) ? x : frame.Get(name)), -1, 1);
+        }
+        if (r.Invert) v = cr.Signed ? -v : 1 - v;
+        return v;
+    }
+
+    private string? _modeRequest;
+
+    /// <summary>
+    /// The mode a rule asked for since the last call ("Next", "Previous" or a mode's name), or null. A rule asks once for each press of its button.
+    /// </summary>
+    public string? TakeModeRequest()
+    {
+        string? request = _modeRequest;
+        _modeRequest = null;
+        return request;
+    }
+
+    /// <summary>
+    /// Treat every button and mode input that is already held as having been held all along, so that an engine built in the middle of a press (when
+    /// the mode changes) does not count it as a new press: holding the switch button does not switch again, and a held pedal does not toggle.
+    /// </summary>
+    public void Prime(InputFrame frame)
+    {
+        foreach (CompiledRule cr in _rules)
+        {
+            if (cr.Target.Kind == TargetKind.Axis) continue;
+            double threshold = cr.Rule.Threshold ?? 0.5;
+            double v = Prepare(cr, frame);
+            cr.Previous = threshold < 0 ? v <= threshold : v >= threshold;
+        }
     }
 
     private static void Fill(PadState state, ReadOnlySpan<double> axes)
@@ -182,11 +249,12 @@ public sealed class MappingEngine
         return cr.SmoothValue;
     }
 
-    private static bool EvaluateButton(CompiledRule cr, double v, long nowMs)
+    private static bool EvaluateButton(CompiledRule cr, double v, long nowMs, out bool over)
     {
         Rule r = cr.Rule;
         double threshold = r.Threshold ?? 0.5;
         bool pressed = threshold < 0 ? v <= threshold : v >= threshold;
+        over = pressed;
         bool rising = pressed && !cr.Previous;
         cr.Previous = pressed;
 

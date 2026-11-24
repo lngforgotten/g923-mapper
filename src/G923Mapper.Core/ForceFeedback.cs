@@ -15,6 +15,12 @@ public sealed class ForceSettings
     /// </summary>
     public int SpringPercent { get; set; } = 0;
 
+    /// <summary>
+    /// A steady resistance to turning the wheel, the same at any speed (it feels like a heavier, "stiffer" wheel without pulling back to centre),
+    /// 0 to 100. Off by default.
+    /// </summary>
+    public int FrictionPercent { get; set; } = 0;
+
     /// <summary>Which of the game's two rumble motors the wheel plays: "both" (the default), "heavy" (the slow, strong one only) or "light" (the fast, fine one only).</summary>
     public string Motors { get; set; } = ForceMath.MotorsBoth;
 
@@ -49,6 +55,7 @@ public static class ForceMath
         if (profile is null) return f;
         if (profile.Rumble is int r) f.RumblePercent = Math.Clamp(r, 0, 100);
         if (profile.Spring is int s) f.SpringPercent = Math.Clamp(s, 0, 100);
+        if (profile.Friction is int fr) f.FrictionPercent = Math.Clamp(fr, 0, 100);
         if (profile.Motors is { } m && MotorChoices.Contains(m, StringComparer.OrdinalIgnoreCase)) f.Motors = m.ToLowerInvariant();
         return f;
     }
@@ -66,6 +73,14 @@ public static class ForceMath
     /// full strength fights every turn of the wheel and feels like heavy, sluggish steering.
     /// </summary>
     public const int SpringMax = 5000;
+
+    /// <summary>
+    /// The friction at 100% on the slider. Like the spring it is kept well below the device maximum, because friction is felt at every speed.
+    /// </summary>
+    public const int FrictionMax = 5000;
+
+    /// <summary>Friction strength for a percentage.</summary>
+    public static int FrictionCoefficient(int percent) => (int)Math.Round(Math.Clamp(percent, 0, 100) / 100.0 * FrictionMax);
 
     /// <summary>A rumble motor (0..255) scaled by the user's strength (0..100) to a periodic-effect magnitude.</summary>
     public static int RumbleMagnitude(byte motor, int percent)

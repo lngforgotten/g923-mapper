@@ -28,10 +28,28 @@ public sealed class ProfileForce
     public int? Rumble { get; set; }
     /// <summary>The centring spring, 0 to 100.</summary>
     public int? Spring { get; set; }
+    /// <summary>A steady resistance to turning the wheel, 0 to 100.</summary>
+    public int? Friction { get; set; }
     /// <summary>"both", "heavy" or "light": which of the game's two rumble motors the wheel plays.</summary>
     public string? Motors { get; set; }
 
-    public bool IsEmpty => Rumble is null && Spring is null && Motors is null;
+    public bool IsEmpty => Rumble is null && Spring is null && Friction is null && Motors is null;
+}
+
+/// <summary>
+/// One mode of a profile (Shooting, Driving, Flying...): a set of rules and a feel that apply while the mode is active, on top of the profile's own
+/// rules, which apply in every mode. A mode's rule replaces the profile's rules for the same output target, a mode can turn some of them off, and its
+/// feel overrides the profile's for whatever it sets. The first mode is the one a profile starts in.
+/// </summary>
+public sealed class ProfileMode
+{
+    public string Name { get; set; } = "";
+    /// <summary>Force feedback for this mode, laid over the profile's own feel for whatever it sets; null = the profile's.</summary>
+    public ProfileForce? Force { get; set; }
+    /// <summary>Output targets of the profile's rules that are off while this mode is active.</summary>
+    public List<string>? RemovedRules { get; set; }
+    /// <summary>Rules that apply only in this mode. Each replaces the profile's rules for the same output target, or adds one.</summary>
+    public List<Rule> Rules { get; set; } = new();
 }
 
 public sealed class Rule
@@ -92,6 +110,14 @@ public sealed class Rule
 public sealed class Profile
 {
     public string Name { get; set; } = "";
+    /// <summary>Free text for the user ("anti-deadzone 0.08 felt right in GTA"). Never used by the mapping itself.</summary>
+    public string? Notes { get; set; }
+    /// <summary>A template: a profile with no game attached that other profiles can be based on (see <see cref="Templates"/>).</summary>
+    public bool IsTemplate { get; set; }
+    /// <summary>The template this profile is based on, and the copy of it the profile has pinned. A profile with a parent stores only what it does differently.</summary>
+    public ParentLink? Parent { get; set; }
+    /// <summary>Only in a profile file that has a parent: the output targets of template rules this profile drops. Cleared when the file is read.</summary>
+    public List<string>? RemovedRules { get; set; }
     public ProfileMatch Match { get; set; } = new();
     public string Device { get; set; } = DeviceRegistry.AutoDevice;
     /// <summary>"strict" (controller mapping only: the safe choice for games with online play or anti-cheat) or "standard" (extras such as keyboard output allowed). See <see cref="ProfileSafety.Effective"/>.</summary>
@@ -105,6 +131,8 @@ public sealed class Profile
     /// </summary>
     public bool? HideWheel { get; set; }
     public List<Rule> Rules { get; set; } = new();
+    /// <summary>Modes of this profile (see <see cref="ProfileMode"/>). Empty = the profile has just its own rules. A rule sending to "Mode:Next", "Mode:Previous" or "Mode:Name" switches between them.</summary>
+    public List<ProfileMode> Modes { get; set; } = new();
 }
 
 public sealed record ProfileLoadResult(Profile? Profile, IReadOnlyList<string> Errors, IReadOnlyList<string> Warnings)
@@ -142,6 +170,13 @@ public static class ProfileLoader
             return Fail($"Invalid JSON{where}: {ex.Message}");
         }
         if (profile is null) return Fail("Profile is empty.");
+        if (profile.Parent is not null)
+        {
+            // A profile based on a template is read as the template copy it carries with its own differences laid over it.
+            Profile? merged = Templates.Resolve(profile, json, out string? mergeError);
+            if (merged is null) return Fail(mergeError!);
+            profile = merged;
+        }
 
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -154,11 +189,13 @@ public static class ProfileLoader
     private static void Validate(Profile p, DeviceRegistry devices, List<string> errors, List<string> warnings)
     {
         if (string.IsNullOrWhiteSpace(p.Name)) errors.Add("Profile needs a \"name\".");
+        if (p.IsTemplate && p.Match.Exe.Count > 0) warnings.Add("A template is not attached to a game; the games listed in it are ignored. Put them on the profiles made from it.");
 
         if (p.Force is { } force)
         {
             if (force.Rumble is int rb and (< 0 or > 100)) errors.Add($"force.rumble must be 0 to 100 (not {rb}).");
             if (force.Spring is int sb and (< 0 or > 100)) errors.Add($"force.spring must be 0 to 100 (not {sb}).");
+            if (force.Friction is int fb and (< 0 or > 100)) errors.Add($"force.friction must be 0 to 100 (not {fb}).");
             if (force.Motors is { } m && !ForceMath.MotorChoices.Contains(m, StringComparer.OrdinalIgnoreCase))
                 errors.Add($"force.motors must be one of {string.Join(", ", ForceMath.MotorChoices)} (not \"{m}\").");
         }
@@ -181,16 +218,18 @@ public static class ProfileLoader
         if (device is null)
             errors.Add($"Unknown device \"{p.Device}\". Use \"{DeviceRegistry.AutoDevice}\" (whichever wheel is connected) or one of: {string.Join(", ", devices.Names)}.");
 
-        for (int i = 0; i < p.Rules.Count; i++)
+        ValidateModes(p, errors, warnings);
+
+        foreach (var (r, at) in AllRules(p))
         {
-            Rule r = p.Rules[i];
-            string at = $"Rule {i + 1} ({r.From} -> {r.To})";
 
             if (device is not null && !devices.IsKnownInput(device, r.From))
                 errors.Add($"{at}: unknown input \"{r.From}\"" + (r.From.Contains('.') ? " (is that extra device set up?)." : "."));
 
             if (!Target.TryParse(r.To, out Target? target, out string? targetError))
                 errors.Add($"{at}: {targetError}");
+            else if (target is { Kind: TargetKind.Mode } && !ProfileModes.IsKnownTarget(p, target.Key))
+                errors.Add($"{at}: there is no mode called \"{target.Key}\"." + (p.Modes.Count == 0 ? " This profile has no modes yet." : $" Modes: {string.Join(", ", p.Modes.Select(m => m.Name))}; or Next, Previous."));
 
             if (!Curves.Contains(r.Curve, StringComparer.OrdinalIgnoreCase))
                 errors.Add($"{at}: curve must be one of {string.Join(", ", Curves)}.");
@@ -258,6 +297,44 @@ public static class ProfileLoader
         }
     }
 
+    /// <summary>The profile's own rules and every mode's rules, each with the words used to name it in a message.</summary>
+    private static IEnumerable<(Rule Rule, string At)> AllRules(Profile p)
+    {
+        for (int i = 0; i < p.Rules.Count; i++)
+            yield return (p.Rules[i], $"Rule {i + 1} ({p.Rules[i].From} -> {p.Rules[i].To})");
+        foreach (ProfileMode m in p.Modes)
+            for (int i = 0; i < m.Rules.Count; i++)
+                yield return (m.Rules[i], $"Mode \"{m.Name}\" rule {i + 1} ({m.Rules[i].From} -> {m.Rules[i].To})");
+    }
+
+    private static void ValidateModes(Profile p, List<string> errors, List<string> warnings)
+    {
+        if (p.Modes.Count == 0) return;
+        if (p.Modes.Count > ProfileModes.MaxModes) errors.Add($"A profile can have at most {ProfileModes.MaxModes} modes (this one has {p.Modes.Count}).");
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        for (int i = 0; i < p.Modes.Count; i++)
+        {
+            ProfileMode m = p.Modes[i];
+            string who = string.IsNullOrWhiteSpace(m.Name) ? $"Mode {i + 1}" : $"Mode \"{m.Name}\"";
+            if (string.IsNullOrWhiteSpace(m.Name)) { errors.Add($"{who} needs a name."); continue; }
+            if (m.Name.Length > 30) errors.Add($"{who}: the name is too long (30 characters at most).");
+            if (ProfileModes.IsReservedName(m.Name)) errors.Add($"{who}: that name is used for switching (Next, Previous); choose another.");
+            if (m.Name.Contains(':')) errors.Add($"{who}: the name cannot contain a colon.");
+            if (!seen.Add(m.Name.Trim())) errors.Add($"{who}: another mode has the same name.");
+            if (m.Force is { } force)
+            {
+                if (force.Rumble is int rb and (< 0 or > 100)) errors.Add($"{who}: force.rumble must be 0 to 100 (not {rb}).");
+                if (force.Spring is int sb and (< 0 or > 100)) errors.Add($"{who}: force.spring must be 0 to 100 (not {sb}).");
+                if (force.Friction is int fb and (< 0 or > 100)) errors.Add($"{who}: force.friction must be 0 to 100 (not {fb}).");
+                if (force.Motors is { } mo && !ForceMath.MotorChoices.Contains(mo, StringComparer.OrdinalIgnoreCase))
+                    errors.Add($"{who}: force.motors must be one of {string.Join(", ", ForceMath.MotorChoices)} (not \"{mo}\").");
+            }
+            foreach (string t in m.RemovedRules ?? [])
+                if (!p.Rules.Any(r => string.Equals(r.To.Trim(), t.Trim(), StringComparison.OrdinalIgnoreCase)))
+                    warnings.Add($"{who} turns off \"{t}\", but the profile has no rule for that output.");
+        }
+    }
+
     private static void ValidatePoints(double[][]? points, string at, List<string> errors)
     {
         if (points is null || points.Length < 2) { errors.Add($"{at}: custom curve needs at least 2 points."); return; }
@@ -275,7 +352,8 @@ public static class ProfileLoader
     }
 }
 
-public enum TargetKind { Axis, Button, Key }
+/// <summary>Axis and Button are the virtual controller; Key is a keyboard key or mouse button; Mode switches the profile's mode (Mode:Next, Mode:Previous, Mode:Name).</summary>
+public enum TargetKind { Axis, Button, Key, Mode }
 
 public sealed record Target(TargetKind Kind, PadAxis Axis = default, PadButton Button = default, string Key = "", int Pad = 1)
 {
@@ -291,6 +369,7 @@ public sealed record Target(TargetKind Kind, PadAxis Axis = default, PadButton B
             string rest = trimmed[(trimmed.IndexOf(':') + 1)..];
             if (!TryParseOne(rest, out Target? inner, out error)) return false;
             if (inner!.Kind == TargetKind.Key) { error = "keys and mouse buttons cannot go to the second controller."; return false; }
+            if (inner.Kind == TargetKind.Mode) { error = "switching modes cannot go to the second controller."; return false; }
             target = inner with { Pad = 2 };
             return true;
         }
@@ -318,6 +397,13 @@ public sealed record Target(TargetKind Kind, PadAxis Axis = default, PadButton B
             target = new Target(TargetKind.Key, Key: KeyNames.MousePrefix + button);
             return true;
         }
+        if (text.StartsWith("Mode:", StringComparison.OrdinalIgnoreCase))
+        {
+            string mode = text[5..].Trim();
+            if (mode.Length == 0) { error = "\"Mode:\" needs Next, Previous or the name of a mode."; return false; }
+            target = new Target(TargetKind.Mode, Key: mode);
+            return true;
+        }
         if (text.StartsWith("Key:", StringComparison.OrdinalIgnoreCase))
         {
             string key = text[4..].Trim();
@@ -328,7 +414,7 @@ public sealed record Target(TargetKind Kind, PadAxis Axis = default, PadButton B
         if (!int.TryParse(text, out _) && Enum.TryParse(text, true, out PadAxis a) && Enum.IsDefined(a))
         { target = new Target(TargetKind.Axis, Axis: a); return true; }
 
-        error = $"unknown target \"{text}\". Use one of {string.Join(", ", Enum.GetNames<PadAxis>())}, Button:<name> or Key:<name>.";
+        error = $"unknown target \"{text}\". Use one of {string.Join(", ", Enum.GetNames<PadAxis>())}, Button:<name>, Key:<name> or Mode:<name>.";
         return false;
     }
 }

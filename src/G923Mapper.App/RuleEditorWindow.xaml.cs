@@ -53,18 +53,38 @@ public partial class RuleEditorWindow : Window
     private readonly System.Windows.Threading.DispatcherTimer _learnTimer = new() { Interval = TimeSpan.FromMilliseconds(40) };
     private MapperSnapshot? _learnBaseline;
     private DateTime _learnUntil;
-    private readonly ObservableCollection<RuleRow> _rows = new();
+    private readonly ObservableCollection<RuleRow> _rows = new();   // the profile's own rules
+
+    /// <summary>One mode as it is being edited: its own rules, the profile rules it turns off, and its feel.</summary>
+    private sealed class EditorMode
+    {
+        public string Name = "";
+        public ObservableCollection<RuleRow> Rows = new();
+        public List<string> Removed = new();
+        public ProfileForce? Force;
+    }
+
+    private readonly List<EditorMode> _modes = new();
+    private int _view = -1;               // -1 = the profile's own rules and feel; otherwise which mode is shown
+    private ProfileForce? _profileForce;  // the profile's feel, kept while a mode is shown
+    private ObservableCollection<RuleRow> Rows => _view >= 0 && _view < _modes.Count ? _modes[_view].Rows : _rows;
     private readonly List<string> _fieldErrors = new();
     private bool _populating;
     private string _lastJson = "";
     private bool _valid;
+    private readonly AppSettings? _settings;
+    private readonly Func<string, Profile?>? _findTemplate;
+    private bool _isTemplate;
+    private ParentLink? _parent;
 
     public bool Saved { get; private set; }
 
     /// <param name="latest">The mapper's latest snapshot, used by the Learn button; may return null when the mapper is stopped.</param>
-    public RuleEditorWindow(Profile profile, DeviceRegistry devices, string path, Func<MapperSnapshot?> latest)
+    public RuleEditorWindow(Profile profile, DeviceRegistry devices, string path, Func<MapperSnapshot?> latest, AppSettings? settings = null, Func<string, Profile?>? findTemplate = null)
     {
         InitializeComponent();
+        _settings = settings;
+        _findTemplate = findTemplate;
         _devices = devices;
         _path = path;
         _latest = latest;
@@ -77,6 +97,8 @@ public partial class RuleEditorWindow : Window
         // Work on a copy so Cancel leaves the running profile untouched.
         Profile copy = ProfileLoader.Parse(ProfileWriter.ToJson(profile), devices).Profile ?? profile;
         Title = $"Edit rules: {copy.Name}";
+        _isTemplate = copy.IsTemplate;
+        _parent = copy.Parent;
 
         CurveBox.ItemsSource = ProfileLoader.Curves;
         ModeBox.ItemsSource = ProfileLoader.Modes;
@@ -94,6 +116,7 @@ public partial class RuleEditorWindow : Window
 
         _populating = true;
         NameBox.Text = copy.Name;
+        NotesBox.Text = copy.Notes ?? "";
         DeviceBox.SelectedItem = ((IEnumerable<string>)DeviceBox.ItemsSource).FirstOrDefault(n => n.Equals(copy.Device, StringComparison.OrdinalIgnoreCase)) ?? copy.Device;
         ExeBox.Text = string.Join(", ", copy.Match.Exe);
         HideWheelBox.ItemsSource = new[] { "Leave the wheel as it is", "Hide the wheel while its game runs", "Show the wheel while its game runs" };
@@ -102,6 +125,7 @@ public partial class RuleEditorWindow : Window
         FeelBox.IsChecked = copy.Force is { IsEmpty: false };
         FeelRumble.Value = copy.Force?.Rumble ?? 50;
         FeelSpring.Value = copy.Force?.Spring ?? 0;
+        FeelFriction.Value = copy.Force?.Friction ?? 0;
         FeelMotors.SelectedIndex = string.Equals(copy.Force?.Motors, ForceMath.MotorsHeavy, StringComparison.OrdinalIgnoreCase) ? 1
             : string.Equals(copy.Force?.Motors, ForceMath.MotorsLight, StringComparison.OrdinalIgnoreCase) ? 2 : 0;
         PadBox.ItemsSource = new[] { "Xbox 360", "DualShock 4" };
@@ -116,8 +140,17 @@ public partial class RuleEditorWindow : Window
         RefreshFromList();
 
         foreach (Rule r in copy.Rules) _rows.Add(new RuleRow(r));
+        _profileForce = copy.Force;
+        foreach (ProfileMode m in copy.Modes)
+        {
+            var em = new EditorMode { Name = m.Name, Removed = (m.RemovedRules ?? []).ToList(), Force = m.Force };
+            foreach (Rule r in m.Rules) em.Rows.Add(new RuleRow(r));
+            _modes.Add(em);
+        }
+        ToBox.ItemsSource = ToChoices(copy.Outputs.SecondPad, ModeNames);
         RuleList.ItemsSource = _rows;
         if (_rows.Count > 0) RuleList.SelectedIndex = 0; else LoadRule(null);
+        RefreshViewBox(-1);
         Revalidate();
     }
 
@@ -144,7 +177,9 @@ public partial class RuleEditorWindow : Window
     }
 
     /// <summary>Everything the "To output" box offers; the P2: ones (the second virtual controller) only when that is switched on.</summary>
-    private static List<string> ToChoices(bool secondPad)
+    private IEnumerable<string> ModeNames => _modes.Select(m => m.Name);
+
+    private static List<string> ToChoices(bool secondPad, IEnumerable<string>? modeNames = null)
     {
         var list = Enum.GetNames<PadAxis>()
             .Concat(Enum.GetNames<PadButton>().Select(b => "Button:" + b))
@@ -152,6 +187,9 @@ public partial class RuleEditorWindow : Window
             .Concat(KeyNames.MouseButtonNames).ToList();
         if (secondPad)
             list.AddRange(Enum.GetNames<PadAxis>().Select(a => "P2:" + a).Concat(Enum.GetNames<PadButton>().Select(b => "P2:Button:" + b)));
+        list.Add("Mode:Next");
+        list.Add("Mode:Previous");
+        list.AddRange((modeNames ?? []).Select(n => "Mode:" + n));
         return list;
     }
 
@@ -160,7 +198,7 @@ public partial class RuleEditorWindow : Window
         if (_populating) return;
         string text = ToBox.Text;
         _populating = true;
-        ToBox.ItemsSource = ToChoices(SecondPadBox.IsChecked == true);
+        ToBox.ItemsSource = ToChoices(SecondPadBox.IsChecked == true, ModeNames);
         ToBox.Text = text;
         _populating = false;
         Revalidate();
@@ -410,9 +448,10 @@ public partial class RuleEditorWindow : Window
 
     private void Feel_Slider(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        if (FeelRumbleText is null || FeelSpringText is null) return;   // during start-up
+        if (FeelRumbleText is null || FeelSpringText is null || FeelFrictionText is null) return;   // during start-up
         FeelRumbleText.Text = $"{(int)FeelRumble.Value}%";
         FeelSpringText.Text = $"{(int)FeelSpring.Value}%";
+        FeelFrictionText.Text = $"{(int)FeelFriction.Value}%";
         if (!_populating) Revalidate();
     }
 
@@ -420,9 +459,10 @@ public partial class RuleEditorWindow : Window
     private void UpdateFeelUi()
     {
         bool on = FeelBox.IsChecked == true;
-        FeelRumble.IsEnabled = FeelSpring.IsEnabled = FeelMotors.IsEnabled = on;
+        FeelRumble.IsEnabled = FeelSpring.IsEnabled = FeelFriction.IsEnabled = FeelMotors.IsEnabled = on;
         FeelRumbleText.Text = $"{(int)FeelRumble.Value}%";
         FeelSpringText.Text = $"{(int)FeelSpring.Value}%";
+        FeelFrictionText.Text = $"{(int)FeelFriction.Value}%";
     }
 
     private string _safetyBefore = "Strict";
@@ -453,17 +493,10 @@ public partial class RuleEditorWindow : Window
     private void Safety_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (_populating) return;
-        if (IsStandard && _safetyBefore == "Strict")
+        // The warning is shown once; after it has been accepted the profile can be switched freely.
+        if (IsStandard && _safetyBefore == "Strict" && !SafetyPrompts.ConfirmStandard(this, _settings))
         {
-            var answer = MessageBox.Show(this,
-                "Standard mode allows extras such as keyboard output, which synthetic key presses can look like automation to anti-cheat. " +
-                "It is meant for offline and single-player games. Do not use it for a game with online play or anti-cheat (for example GTA Online).\n\n" +
-                "Switch this profile to Standard?",
-                "Switch to Standard", MessageBoxButton.OKCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel);
-            if (answer != MessageBoxResult.OK)
-            {
-                _populating = true; SafetyBox.SelectedItem = "Strict"; _populating = false;
-            }
+            _populating = true; SafetyBox.SelectedItem = "Strict"; _populating = false;
         }
         _safetyBefore = SafetyBox.SelectedItem as string ?? "Strict";
         UpdateSafetyUi();
@@ -500,6 +533,9 @@ public partial class RuleEditorWindow : Window
     private Profile BuildProfile() => new()
     {
         Name = NameBox.Text.Trim(),
+        Notes = string.IsNullOrWhiteSpace(NotesBox.Text) ? null : NotesBox.Text.Trim(),
+        IsTemplate = _isTemplate,
+        Parent = _parent,
         Device = DeviceBox.SelectedItem as string ?? "",
         Match = new ProfileMatch
         {
@@ -507,21 +543,318 @@ public partial class RuleEditorWindow : Window
         },
         Safety = IsStandard ? ProfileSafety.Standard : ProfileSafety.Strict,
         HideWheel = HideWheelBox.SelectedIndex switch { 1 => true, 2 => false, _ => null },
-        Force = FeelBox.IsChecked == true
-            ? new ProfileForce
-            {
-                Rumble = (int)FeelRumble.Value, Spring = (int)FeelSpring.Value,
-                Motors = FeelMotors.SelectedIndex switch { 1 => ForceMath.MotorsHeavy, 2 => ForceMath.MotorsLight, _ => ForceMath.MotorsBoth },
-            }
-            : null,
+        Force = _view < 0 ? ForceFromUi() : _profileForce,
+        Modes = _modes.Select((m, i) => new ProfileMode
+        {
+            Name = m.Name,
+            Force = i == _view ? ForceFromUi() : m.Force,
+            RemovedRules = m.Removed.Count == 0 ? null : m.Removed.ToList(),
+            Rules = m.Rows.Select(r => r.Rule).ToList(),
+        }).ToList(),
         Outputs = new ProfileOutputs
         {
-            Keyboard = KeyboardBox.IsChecked == true, Turbo = _rows.Any(r => r.Rule.Turbo),
+            Keyboard = KeyboardBox.IsChecked == true, Turbo = _rows.Concat(_modes.SelectMany(m => m.Rows)).Any(r => r.Rule.Turbo),
             Pad = PadBox.SelectedItem as string == "DualShock 4" ? PadKinds.DualShock4Text : null,
             SecondPad = SecondPadBox.IsChecked == true,
         },
         Rules = _rows.Select(r => r.Rule).ToList(),
     };
+
+    // ---------------------------------------------------------------- modes
+
+    private ProfileForce? ForceFromUi() => FeelBox.IsChecked == true
+        ? new ProfileForce
+        {
+            Rumble = (int)FeelRumble.Value, Spring = (int)FeelSpring.Value, Friction = (int)FeelFriction.Value,
+            Motors = FeelMotors.SelectedIndex switch { 1 => ForceMath.MotorsHeavy, 2 => ForceMath.MotorsLight, _ => ForceMath.MotorsBoth },
+        }
+        : null;
+
+    /// <summary>Show the feel belonging to the view being edited (the profile's, or the mode's) in the feel controls.</summary>
+    private void ShowFeel()
+    {
+        ProfileForce? own = _view < 0 ? _profileForce : _modes[_view].Force;
+        ProfileForce? basis = own ?? _profileForce;   // a mode that has no feel of its own starts from the profile's when it is switched on
+        _populating = true;
+        FeelBox.Content = _view < 0 ? "Own force feedback" : "Own feel in this mode";
+        FeelBox.IsChecked = own is { IsEmpty: false };
+        FeelRumble.Value = basis?.Rumble ?? 50;
+        FeelSpring.Value = basis?.Spring ?? 0;
+        FeelFriction.Value = basis?.Friction ?? 0;
+        FeelMotors.SelectedIndex = string.Equals(basis?.Motors, ForceMath.MotorsHeavy, StringComparison.OrdinalIgnoreCase) ? 1
+            : string.Equals(basis?.Motors, ForceMath.MotorsLight, StringComparison.OrdinalIgnoreCase) ? 2 : 0;
+        _populating = false;
+        UpdateFeelUi();
+    }
+
+    private void RefreshViewBox(int select)
+    {
+        _populating = true;
+        var items = new List<string> { "The profile (rules for every mode)" };
+        items.AddRange(_modes.Select(m => "Mode: " + m.Name));
+        ViewBox.ItemsSource = items;
+        ViewBox.SelectedIndex = Math.Clamp(select + 1, 0, items.Count - 1);
+        _populating = false;
+        UpdateModeUi();
+    }
+
+    /// <summary>Switch which rules (the profile's own or one mode's) and which feel the form is editing, keeping what was typed in the one being left.</summary>
+    private void SelectView(int view)
+    {
+        view = Math.Clamp(view, -1, _modes.Count - 1);
+        if (view == _view && ViewBox.SelectedIndex == view + 1) return;
+        // What the feel controls show belongs to the view being left; keep it there.
+        if (_view < 0) _profileForce = ForceFromUi(); else if (_view < _modes.Count) _modes[_view].Force = ForceFromUi();
+        _view = view;
+        RefreshViewBox(view);
+        RuleList.ItemsSource = Rows;
+        if (Rows.Count > 0) RuleList.SelectedIndex = 0; else LoadRule(null);
+        ShowFeel();
+        Revalidate();
+    }
+
+    private void View_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_populating || ViewBox.SelectedIndex < 0) return;
+        SelectView(ViewBox.SelectedIndex - 1);
+    }
+
+    private void UpdateModeUi()
+    {
+        bool inMode = _view >= 0 && _view < _modes.Count;
+        RenameModeButton.IsEnabled = DeleteModeButton.IsEnabled = inMode;
+        EarlierModeButton.IsEnabled = inMode && _view > 0;
+        LaterModeButton.IsEnabled = inMode && _view < _modes.Count - 1;
+        TurnedOffButton.Visibility = inMode ? Visibility.Visible : Visibility.Collapsed;
+        bool anySwitch = _rows.Concat(_modes.SelectMany(m => m.Rows)).Any(r => r.Rule.To.TrimStart().StartsWith("Mode:", StringComparison.OrdinalIgnoreCase));
+        SwitchRuleButton.Visibility = _modes.Count > 0 && !anySwitch ? Visibility.Visible : Visibility.Collapsed;
+        ModeNote.Text = _modes.Count == 0
+            ? "A profile can have modes, such as Shooting, Driving and Flying: the same wheel and pedals doing different jobs, switched with a wheel button or a shortcut. Add one to start."
+            : inMode
+                ? $"Editing the mode \"{_modes[_view].Name}\": its rules apply only while it is active, and each replaces the profile's rule for the same output. The feel below is this mode's own. The first mode ({_modes[0].Name}) is where the profile starts."
+                : $"The profile's own rules apply in every mode ({string.Join(", ", _modes.Select(m => m.Name))}). Rules that switch modes belong here, so they work in all of them."
+                  + (anySwitch ? "" : " No wheel button switches modes yet: use Add a switch button, or the shortcut in Settings.");
+    }
+
+    private void AddMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (_modes.Count >= ProfileModes.MaxModes)
+        {
+            MessageBox.Show(this, $"A profile can have at most {ProfileModes.MaxModes} modes.", "Add mode", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        string? wanted = Prompt.Ask(this, "Add mode", "Name for the new mode, for example Shooting, Driving or Flying.", _modes.Count == 0 ? "Shooting" : "Driving")?.Trim();
+        if (string.IsNullOrEmpty(wanted)) return;
+        wanted = wanted.Replace(":", "");
+        string name = FreeModeName(wanted, null);
+        _modes.Add(new EditorMode { Name = name });
+        ToBox.ItemsSource = ToChoices(SecondPadBox.IsChecked == true, ModeNames);
+        SelectView(_modes.Count - 1);
+    }
+
+    private string FreeModeName(string wanted, EditorMode? except)
+    {
+        bool Taken(string n) => ProfileModes.IsReservedName(n) || _modes.Any(m => !ReferenceEquals(m, except) && string.Equals(m.Name, n, StringComparison.OrdinalIgnoreCase));
+        if (!Taken(wanted)) return wanted;
+        for (int n = 2; ; n++) if (!Taken($"{wanted} {n}")) return $"{wanted} {n}";
+    }
+
+    private void RenameMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (_view < 0 || _view >= _modes.Count) return;
+        EditorMode m = _modes[_view];
+        string? wanted = Prompt.Ask(this, "Rename mode", "New name for this mode.", m.Name)?.Trim().Replace(":", "");
+        if (string.IsNullOrEmpty(wanted) || wanted == m.Name) return;
+        string old = m.Name;
+        m.Name = FreeModeName(wanted, m);
+        // Rules that switch to this mode by name follow it.
+        foreach (RuleRow row in _rows.Concat(_modes.SelectMany(x => x.Rows)))
+            if (row.Rule.To.Trim().Equals("Mode:" + old, StringComparison.OrdinalIgnoreCase)) { row.Rule.To = "Mode:" + m.Name; row.Refresh(); }
+        ToBox.ItemsSource = ToChoices(SecondPadBox.IsChecked == true, ModeNames);
+        RefreshViewBox(_view);
+        LoadRule(Current);
+        Revalidate();
+    }
+
+    private void DeleteMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (_view < 0 || _view >= _modes.Count) return;
+        EditorMode m = _modes[_view];
+        var switching = _rows.Concat(_modes.SelectMany(x => x.Rows)).Where(r => r.Rule.To.Trim().Equals("Mode:" + m.Name, StringComparison.OrdinalIgnoreCase)).ToList();
+        string extra = switching.Count > 0 ? $"\n\n{switching.Count} rule{(switching.Count == 1 ? "" : "s")} that switch{(switching.Count == 1 ? "es" : "")} to it will be removed too." : "";
+        if (MessageBox.Show(this, $"Delete the mode \"{m.Name}\" and its {m.Rows.Count} rule{(m.Rows.Count == 1 ? "" : "s")}?{extra}", "Delete mode",
+                MessageBoxButton.OKCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
+        foreach (RuleRow row in switching)
+        {
+            _rows.Remove(row);
+            foreach (EditorMode other in _modes) other.Rows.Remove(row);
+        }
+        int removedAt = _view;
+        _view = -1;           // the mode's feel is going with it, so nothing is kept from the controls
+        _modes.RemoveAt(removedAt);
+        ToBox.ItemsSource = ToChoices(SecondPadBox.IsChecked == true, ModeNames);
+        RefreshViewBox(-1);
+        RuleList.ItemsSource = Rows;
+        if (Rows.Count > 0) RuleList.SelectedIndex = 0; else LoadRule(null);
+        ShowFeel();
+        Revalidate();
+    }
+
+    private void MoveMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (_view < 0 || _view >= _modes.Count || sender is not Button { Tag: string tag } || !int.TryParse(tag, out int step)) return;
+        int to = _view + step;
+        if (to < 0 || to >= _modes.Count) return;
+        // Keep the feel on screen with its mode before the order changes.
+        _modes[_view].Force = ForceFromUi();
+        (_modes[_view], _modes[to]) = (_modes[to], _modes[_view]);
+        _view = to;
+        RefreshViewBox(to);
+        Revalidate();
+    }
+
+    /// <summary>Tick the profile rules (by what they send to) that should not apply while this mode is active.</summary>
+    private void TurnedOff_Click(object sender, RoutedEventArgs e)
+    {
+        if (_view < 0 || _view >= _modes.Count) return;
+        EditorMode m = _modes[_view];
+        var targets = _rows.Select(r => r.Rule.To.Trim()).Where(t => t.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var menu = new ContextMenu { PlacementTarget = TurnedOffButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        if (targets.Count == 0) menu.Items.Add(new MenuItem { Header = "The profile has no rules yet", IsEnabled = false });
+        foreach (string target in targets)
+        {
+            var item = new MenuItem { Header = "Off here: " + target, IsCheckable = true, StaysOpenOnClick = true, IsChecked = m.Removed.Any(x => x.Equals(target, StringComparison.OrdinalIgnoreCase)) };
+            item.Click += (_, _) =>
+            {
+                m.Removed.RemoveAll(x => x.Equals(target, StringComparison.OrdinalIgnoreCase));
+                if (item.IsChecked) m.Removed.Add(target);
+                Revalidate();
+            };
+            menu.Items.Add(item);
+        }
+        menu.IsOpen = true;
+    }
+
+    /// <summary>A starting point for switching from the wheel: a profile rule that sends a button to the next mode, ready for Learn.</summary>
+    private void SwitchRule_Click(object sender, RoutedEventArgs e)
+    {
+        SelectView(-1);
+        var row = new RuleRow(new Rule { From = "", To = "Mode:Next", Curve = "linear" });
+        _rows.Add(row);
+        RuleList.SelectedItem = row;
+        RuleList.ScrollIntoView(row);
+        Revalidate();
+    }
+
+    // ---------------------------------------------------------------- templates
+
+    private Profile? TemplateNow => _parent is null ? null : _findTemplate?.Invoke(_parent.Name);
+
+    /// <summary>The "Template" line of the header: which template this profile follows, how it differs, and whether the template has changed.</summary>
+    private void UpdateTemplateRow(Profile? resolved)
+    {
+        if (!_isTemplate && _parent is null) { TemplateRow.Visibility = Visibility.Collapsed; return; }
+        TemplateRow.Visibility = Visibility.Visible;
+        if (_isTemplate)
+        {
+            TemplateInfo.Text = "This is a template. Profiles made from it are offered your changes as an update.";
+            TemplateMenuButton.Visibility = Visibility.Collapsed;
+            return;
+        }
+        int diffs = resolved is { Parent: not null } ? Templates.Diff(resolved).Count : 0;
+        bool update = Templates.UpdateAvailable(resolved ?? BuildProfile(), TemplateNow);
+        TemplateInfo.Text = $"Follows \"{_parent!.Name}\"; {(diffs == 0 ? "nothing of its own yet" : $"{diffs} thing{(diffs == 1 ? "" : "s")} of its own")}" + (update ? "; the template has changed (update available)" : "");
+        TemplateMenuButton.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>Fill the settings and the rule list from a profile (after a reset or an update), leaving name, notes and game as typed.</summary>
+    private void ReloadFrom(Profile p)
+    {
+        SelectView(-1);   // a template reset or update is about the profile's own rules and settings
+        _profileForce = p.Force;
+        _populating = true;
+        DeviceBox.SelectedItem = ((IEnumerable<string>)DeviceBox.ItemsSource).FirstOrDefault(n => n.Equals(p.Device, StringComparison.OrdinalIgnoreCase)) ?? p.Device;
+        HideWheelBox.SelectedIndex = p.HideWheel is true ? 1 : p.HideWheel is false ? 2 : 0;
+        FeelBox.IsChecked = p.Force is { IsEmpty: false };
+        FeelRumble.Value = p.Force?.Rumble ?? 50;
+        FeelSpring.Value = p.Force?.Spring ?? 0;
+        FeelFriction.Value = p.Force?.Friction ?? 0;
+        FeelMotors.SelectedIndex = string.Equals(p.Force?.Motors, ForceMath.MotorsHeavy, StringComparison.OrdinalIgnoreCase) ? 1
+            : string.Equals(p.Force?.Motors, ForceMath.MotorsLight, StringComparison.OrdinalIgnoreCase) ? 2 : 0;
+        PadBox.SelectedItem = PadKinds.Of(p) == PadKind.DualShock4 ? "DualShock 4" : "Xbox 360";
+        SecondPadBox.IsChecked = p.Outputs.SecondPad;
+        ToBox.ItemsSource = ToChoices(p.Outputs.SecondPad, ModeNames);
+        SafetyBox.SelectedItem = ProfileSafety.Effective(p) == ProfileSafety.Standard ? "Standard" : "Strict";
+        _safetyBefore = SafetyBox.SelectedItem as string ?? "Strict";
+        KeyboardBox.IsChecked = p.Outputs.Keyboard;
+        UpdateSafetyUi();
+        UpdateFeelUi();
+        _rows.Clear();
+        foreach (Rule r in p.Rules) _rows.Add(new RuleRow(r));
+        _populating = false;
+        if (_rows.Count > 0) RuleList.SelectedIndex = 0; else LoadRule(null);
+        RefreshFromList();
+        UpdatePreview();
+        Revalidate();
+    }
+
+    private bool ResetInEditor(TemplateDiff diff)
+    {
+        // Putting the safety mode back to Standard is the same decision as choosing it, so it gets the same one-time warning.
+        bool toStandard = (diff.Key == "safety" && diff.Template == ProfileSafety.Standard) || (diff.Key == "outputs.keyboard" && diff.Template == "on");
+        if (toStandard && !SafetyPrompts.ConfirmStandard(this, _settings)) return false;
+        Profile p = BuildProfile();
+        Templates.Reset(p, diff);
+        ReloadFrom(p);
+        return true;
+    }
+
+    private void TemplateMenu_Click(object sender, RoutedEventArgs e)
+    {
+        if (_parent is null) return;
+        Profile now = BuildProfile();
+        var diffs = Templates.Diff(now);
+        Profile? template = TemplateNow;
+        bool update = Templates.UpdateAvailable(now, template);
+        var menu = new ContextMenu { PlacementTarget = TemplateMenuButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        MenuItem Item(string header, RoutedEventHandler click, bool enabled = true)
+        {
+            var mi = new MenuItem { Header = header, IsEnabled = enabled };
+            mi.Click += click;
+            return mi;
+        }
+
+        menu.Items.Add(Item($"Differences from the template ({diffs.Count})...", (_, _) =>
+            new TemplateDiffWindow(NameBox.Text.Trim(), _parent!.Name, () => Templates.Diff(BuildProfile()), ResetInEditor) { Owner = this }.ShowDialog()));
+
+        string? selected = Current?.Rule.To.Trim();
+        var selectedDiff = selected is null ? null : diffs.FirstOrDefault(d => d.Kind != DiffKind.Setting && string.Equals(d.Key, selected, StringComparison.OrdinalIgnoreCase));
+        menu.Items.Add(Item("Reset the selected rule to the template", (_, _) => ResetInEditor(selectedDiff!), selectedDiff is not null));
+
+        if (update)
+            menu.Items.Add(Item("Update from the template (it has changed)...", (_, _) => UpdateFromTemplate(template!)));
+        menu.Items.Add(new Separator());
+        menu.Items.Add(Item("Stop following the template (make this profile standalone)", (_, _) =>
+        {
+            if (MessageBox.Show(this, "Make this profile standalone? It keeps all its current rules and settings, but no longer follows the template or is offered its changes.",
+                    "Stop following the template", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
+            _parent = null;
+            Revalidate();
+        }));
+        menu.IsOpen = true;
+    }
+
+    private void UpdateFromTemplate(Profile template)
+    {
+        ProfileLoadResult result = Templates.ApplyUpdate(BuildProfile(), template, _devices);
+        if (!result.Ok)
+        {
+            MessageBox.Show(this, "The updated profile would not be valid, so nothing was changed:\n\n" + string.Join("\n", result.Errors.Take(6)), "Update from template", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        _parent = result.Profile!.Parent;
+        ReloadFrom(result.Profile);
+    }
 
     private void Revalidate()
     {
@@ -534,6 +867,8 @@ public partial class RuleEditorWindow : Window
         foreach (string w in result.Warnings) issues.Add(new Issue("⚠ " + w, Amber));
 
         _valid = result.Ok && _fieldErrors.Count == 0;
+        UpdateTemplateRow(result.Profile);
+        UpdateModeUi();
         if (issues.Count == 0) issues.Add(new Issue("✓ Looks good.", Green));
         IssueList.ItemsSource = issues;
         SaveButton.IsEnabled = _valid;
@@ -610,8 +945,8 @@ public partial class RuleEditorWindow : Window
     private void Add_Click(object sender, RoutedEventArgs e)
     {
         var row = new RuleRow(new Rule { From = "throttle", To = "RightTrigger" });
-        int at = RuleList.SelectedIndex >= 0 ? RuleList.SelectedIndex + 1 : _rows.Count;
-        _rows.Insert(at, row);
+        int at = RuleList.SelectedIndex >= 0 ? RuleList.SelectedIndex + 1 : Rows.Count;
+        Rows.Insert(at, row);
         RuleList.SelectedItem = row;
         RuleList.ScrollIntoView(row);
         Revalidate();
@@ -629,7 +964,7 @@ public partial class RuleEditorWindow : Window
             Threshold = s.Threshold, Mode = s.Mode, PulseMs = s.PulseMs, Range = s.Range,
         };
         var row = new RuleRow(copy);
-        _rows.Insert(RuleList.SelectedIndex + 1, row);
+        Rows.Insert(RuleList.SelectedIndex + 1, row);
         RuleList.SelectedItem = row;
         Revalidate();
     }
@@ -638,8 +973,8 @@ public partial class RuleEditorWindow : Window
     {
         if (Current is null) return;
         int i = RuleList.SelectedIndex;
-        _rows.RemoveAt(i);
-        if (_rows.Count > 0) RuleList.SelectedIndex = Math.Min(i, _rows.Count - 1);
+        Rows.RemoveAt(i);
+        if (Rows.Count > 0) RuleList.SelectedIndex = Math.Min(i, Rows.Count - 1);
         else LoadRule(null);
         Revalidate();
     }

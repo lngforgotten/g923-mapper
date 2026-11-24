@@ -18,6 +18,7 @@ public partial class KeyMapWindow : Window
     private readonly Profile _original;
     private readonly Rule? _existing;
     private readonly Func<MapperSnapshot?> _latest;
+    private readonly int _mode;
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(40) };
     private RawInput? _baseline;
     private bool _recording, _capturing;
@@ -26,7 +27,7 @@ public partial class KeyMapWindow : Window
     public bool Changed { get; private set; }
 
     /// <param name="existing">The rule to change or remove; null to add a new mapping.</param>
-    public KeyMapWindow(AppServices services, Profile profile, string path, Rule? existing, Func<MapperSnapshot?> latest)
+    public KeyMapWindow(AppServices services, Profile profile, string path, Rule? existing, Func<MapperSnapshot?> latest, int mode = -1)
     {
         InitializeComponent();
         _s = services;
@@ -34,9 +35,10 @@ public partial class KeyMapWindow : Window
         _original = profile;
         _existing = existing;
         _latest = latest;
+        _mode = mode;
 
         TxtTitle.Text = existing is null ? "Add a key or mouse mapping" : "Change a key or mouse mapping";
-        TxtProfile.Text = $"Profile \"{profile.Name}\"";
+        TxtProfile.Text = $"Profile \"{profile.Name}\"" + (mode >= 0 ? $", mode \"{ProfileModes.NameAt(profile, mode)}\". A change here applies to this mode only." : "");
         KeyBox.ItemsSource = KeyNames.AllKeyNames.Concat(KeyNames.MouseButtonNames).ToList();
         RemoveButton.Visibility = existing is null ? Visibility.Collapsed : Visibility.Visible;
         if (existing is not null)
@@ -155,12 +157,23 @@ public partial class KeyMapWindow : Window
         return true;
     }
 
-    /// <summary>A private copy to edit, and the copy of the rule being changed (found by its place in the list).</summary>
-    private (Profile Copy, Rule? Rule) Working()
+    /// <summary>
+    /// Private copies to edit: the whole profile, the rules in force in the mode being shown (the same thing for a profile with no modes), and the
+    /// rule being changed in them (found by what it connects).
+    /// </summary>
+    private (Profile Full, Profile Copy, Rule? Rule) Working()
     {
-        Profile copy = ProfileLoader.Parse(ProfileWriter.ToJson(_original), _s.Devices).Profile ?? _original;
-        int at = _existing is null ? -1 : _original.Rules.IndexOf(_existing);
-        return (copy, at >= 0 && at < copy.Rules.Count ? copy.Rules[at] : null);
+        Profile full = ProfileLoader.Parse(ProfileWriter.ToJson(_original), _s.Devices).Profile ?? _original;
+        Profile copy = ProfileModes.Resolve(full, _mode);
+        Rule? rule = _existing is null ? null : copy.Rules.FirstOrDefault(r => r.From == _existing.From && r.To == _existing.To);
+        return (full, copy, rule);
+    }
+
+    /// <summary>Write the profile, first keeping a change made inside a mode as that mode's own.</summary>
+    private bool WriteWorking(Profile full, Profile copy)
+    {
+        if (_mode >= 0) ProfileModes.Capture(full, _mode, copy);
+        return Write(full);
     }
 
     private void Save_Click(object sender, RoutedEventArgs e)
@@ -169,7 +182,7 @@ public partial class KeyMapWindow : Window
         if (from.Length == 0) { TxtStatus.Text = "Choose the wheel control first (press Record, or type its name)."; return; }
         if (KeyMappings.TargetFor(KeyBox.Text) is null) { TxtStatus.Text = "That is not a key or mouse button this app knows. Pick one from the list, or press Press a key."; return; }
 
-        var (copy, rule) = Working();
+        var (full, copy, rule) = Working();
         KeyOutputStatus status = KeyMappings.Status(copy);
         if (status.State == KeyOutput.Blocked)
         {
@@ -183,19 +196,20 @@ public partial class KeyMapWindow : Window
                 "Key or mouse mapping", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
             if (answer != MessageBoxResult.Yes) return;
             KeyMappings.Enable(copy);
+            KeyMappings.Enable(full);   // the profile-level switches live on the whole profile, not on the mode
         }
 
         MapperSnapshot? snap = _latest();
         DeviceMap device = snap?.Device ?? _s.Devices.Fallback!;
         if (KeyMappings.Set(copy, device, rule, from, KeyBox.Text) is null) { TxtStatus.Text = "Could not make that mapping."; return; }
-        if (Write(copy)) DialogResult = true;
+        if (WriteWorking(full, copy)) DialogResult = true;
     }
 
     private void Remove_Click(object sender, RoutedEventArgs e)
     {
-        var (copy, rule) = Working();
+        var (full, copy, rule) = Working();
         if (rule is null || !KeyMappings.Remove(copy, rule)) { DialogResult = false; return; }
-        if (Write(copy)) DialogResult = true;
+        if (WriteWorking(full, copy)) DialogResult = true;
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;

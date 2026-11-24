@@ -23,6 +23,8 @@ public sealed class AppServices
     public Action? ApplyInputOptions { get; set; }
     /// <summary>The message from the last attempt to register the shortcut (empty when it worked or is off).</summary>
     public string HotkeyProblem { get; set; } = "";
+    /// <summary>The same for the shortcut that switches modes.</summary>
+    public string ModeHotkeyProblem { get; set; } = "";
 
     /// <summary>Whether HidHide currently hides the wheel. Cached, because asking HidHide takes a moment.</summary>
     public bool WheelHidden { get; private set; }

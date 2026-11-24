@@ -10,8 +10,11 @@ public sealed class WheelForce : IDisposable
 {
     private readonly IDirectInputDevice8 _dev;
     private readonly int[] _axis;
-    private IDirectInputEffect? _spring, _heavy, _light;
-    private int _springPct = -1, _heavyMag = -1, _lightMag = -1;
+    private IDirectInputEffect? _spring, _heavy, _light, _friction;
+    private int _springPct = -1, _heavyMag = -1, _lightMag = -1, _frictionPct = -1;
+
+    /// <summary>Which kind of effect gives the steady resistance: "friction", a "damper" if the wheel has no friction effect, or "none" if it has neither.</summary>
+    public string FrictionKind { get; private set; } = "none";
 
     private WheelForce(IDirectInputDevice8 dev, int axisId)
     {
@@ -40,6 +43,7 @@ public sealed class WheelForce : IDisposable
             {
                 Conditions = [new Condition { Offset = 0, PositiveCoefficient = 0, NegativeCoefficient = 0, PositiveSaturation = ForceMath.Max, NegativeSaturation = ForceMath.Max, DeadBand = 0 }],
             });
+            f.MakeFriction();
             f._heavy = f.Make(shape, new PeriodicForce { Magnitude = 0, Offset = 0, Phase = 0, Period = ForceMath.HeavyPeriodMicroseconds });
             f._light = f.Make(shape, new PeriodicForce { Magnitude = 0, Offset = 0, Phase = 0, Period = ForceMath.LightPeriodMicroseconds });
         }
@@ -49,6 +53,33 @@ public sealed class WheelForce : IDisposable
             throw;
         }
         return f;
+    }
+
+    private static ConditionSet Resistance(int coefficient) => new()
+    {
+        Conditions = [new Condition { Offset = 0, PositiveCoefficient = coefficient, NegativeCoefficient = coefficient, PositiveSaturation = ForceMath.Max, NegativeSaturation = ForceMath.Max, DeadBand = 0 }],
+    };
+
+    /// <summary>Not every wheel has a friction effect, so a refusal is not an error: try a damper, then go without (the slider then does nothing).</summary>
+    private void MakeFriction()
+    {
+        foreach (var (guid, name) in new[] { (EffectGuid.Friction, "friction"), (EffectGuid.Damper, "damper") })
+        {
+            try { _friction = Make(guid, Resistance(0)); FrictionKind = name; AppLog.Info($"Wheel friction slider uses the wheel's {name} effect."); return; }
+            catch (SharpGen.Runtime.SharpGenException ex) { AppLog.Info($"The wheel has no {name} effect ({ex.ResultCode}); trying the next kind."); }
+        }
+        AppLog.Warn("The wheel accepts neither a friction nor a damper effect, so the friction slider will do nothing on it.");
+    }
+
+    /// <summary>Apply the friction strength. Cheap to call every frame; only changes when the value does.</summary>
+    public void SetFriction(int percent)
+    {
+        if (_friction is null || percent == _frictionPct) return;
+        _frictionPct = percent;
+        int k = ForceMath.FrictionCoefficient(percent);
+        if (k == 0) { _friction.Stop(); return; }
+        _friction.SetParameters(new EffectParameters { Parameters = Resistance(k) }, EffectParameterFlags.TypeSpecificParameters);
+        Begin(_friction, FrictionKind);
     }
 
     private IDirectInputEffect Make(Guid kind, TypeSpecificParameters p) => _dev.CreateEffect(kind, new EffectParameters
@@ -126,24 +157,25 @@ public sealed class WheelForce : IDisposable
         }
         string device;
         try { device = _dev.GetForceFeedbackState().ToString(); } catch (SharpGen.Runtime.SharpGenException ex) { device = "err:" + ex.ResultCode.ToString(); }
-        return $"heavy={State(_heavy)}({_heavyMag}) light={State(_light)}({_lightMag}) spring={State(_spring)}({_springPct}%) device=[{device}]";
+        return $"heavy={State(_heavy)}({_heavyMag}) light={State(_light)}({_lightMag}) spring={State(_spring)}({_springPct}%) {FrictionKind}={State(_friction)}({_frictionPct}%) device=[{device}]";
     }
 
     /// <summary>Silence everything, for example when the game stops rumbling or the mapper stops.</summary>
     public void Silence()
     {
-        try { _heavy?.Stop(); _light?.Stop(); _spring?.Stop(); } catch (SharpGen.Runtime.SharpGenException) { }
+        try { _heavy?.Stop(); _light?.Stop(); _spring?.Stop(); _friction?.Stop(); } catch (SharpGen.Runtime.SharpGenException) { }
         _heavyMag = _lightMag = 0;
         _springPct = 0;
+        _frictionPct = 0;
     }
 
     public void Dispose()
     {
         Silence();
-        foreach (var e in new[] { _spring, _heavy, _light })
+        foreach (var e in new[] { _spring, _heavy, _light, _friction })
         {
             try { e?.Unload(); e?.Dispose(); } catch (SharpGen.Runtime.SharpGenException) { }
         }
-        _spring = _heavy = _light = null;
+        _spring = _heavy = _light = _friction = null;
     }
 }

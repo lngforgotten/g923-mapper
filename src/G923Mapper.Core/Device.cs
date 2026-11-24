@@ -306,6 +306,9 @@ public sealed class DeviceRegistry
     public static string ToJson(DeviceMap map) =>
         JsonSerializer.Serialize(new Dictionary<string, DeviceMap> { [map.Name] = map }, WriteOptions);
 
+    /// <summary>One device map as a single JSON object (for a shared profile bundle).</summary>
+    public static string ToJsonObject(DeviceMap map) => JsonSerializer.Serialize(map, WriteOptions);
+
     private static readonly JsonSerializerOptions WriteOptions = new(JsonOptions)
     {
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,

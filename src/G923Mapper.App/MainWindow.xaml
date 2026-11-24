@@ -62,6 +62,23 @@
                                     <TextBlock Text="PROFILE" Style="{StaticResource Caption}" />
                                     <ComboBox x:Name="ProfileBox" SelectionChanged="ProfileBox_SelectionChanged" />
                                     <TextBlock x:Name="ProfileInfo" Style="{StaticResource Muted}" Margin="0,10,0,0" />
+                                    <StackPanel x:Name="ModePanel" Visibility="Collapsed" Margin="0,12,0,0">
+                                        <TextBlock Text="MODE" Style="{StaticResource Caption}" />
+                                        <WrapPanel x:Name="ModeChips" Margin="0,4,0,0" />
+                                        <TextBlock x:Name="ModeHint" Style="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" />
+                                        <Button x:Name="SwitchButtonButton" Content="Set switch button&#8230;" Style="{StaticResource Secondary}" Padding="12,5" Margin="0,8,0,0" HorizontalAlignment="Left"
+                                                Click="SwitchButton_Click"
+                                                ToolTip="Press a wheel button (or a pedal) to make it move to the next mode, and optionally another for the previous one. Saved straight away." />
+                                    </StackPanel>
+                                    <StackPanel x:Name="TemplatePanel" Visibility="Collapsed" Margin="0,8,0,0">
+                                        <TextBlock x:Name="TemplateText" TextWrapping="Wrap" />
+                                        <WrapPanel Margin="0,6,0,0">
+                                            <Button x:Name="TemplateDiffButton" Content="Differences" Style="{StaticResource Secondary}" Padding="12,5" Margin="0,0,8,0" Click="TemplateDiff_Click"
+                                                    ToolTip="What this profile does its own way, and what follows the template. Reset puts one thing back." />
+                                            <Button x:Name="TemplateUpdateButton" Content="Update from template" Style="{StaticResource Primary}" Padding="12,5" Click="TemplateUpdate_Click" Visibility="Collapsed"
+                                                    ToolTip="The template has changed since this profile took it over. Apply the changes; what this profile does its own way is kept." />
+                                        </WrapPanel>
+                                    </StackPanel>
                                     <ItemsControl x:Name="IssueList" Margin="0,8,0,0">
                                         <ItemsControl.ItemTemplate>
                                             <DataTemplate>
@@ -146,6 +163,10 @@
                                     <Button Content="New profile…" Style="{StaticResource Primary}" Padding="16,8" Margin="0,0,8,0" Click="NewProfile_Click" />
                                     <Button Content="Remap all…" Style="{StaticResource Secondary}" Padding="16,8" Click="RemapAll_Click"
                                             ToolTip="Walks through every control of the virtual controller and asks which wheel button or pedal to use." />
+                                    <Button Content="From template&#8230;" Style="{StaticResource Secondary}" Padding="16,8" Margin="8,0,0,0" Click="NewFromTemplate_Click"
+                                            ToolTip="Start a profile from a genre template (Driving, FPS, RPG, Flight, or your own). It follows the template until you change something." />
+                                    <Button Content="Save as template&#8230;" Style="{StaticResource Secondary}" Padding="16,8" Margin="8,0,0,0" Click="SaveAsTemplate_Click"
+                                            ToolTip="Make a template from the selected profile: its settings and rules, with no game attached." />
                                 </StackPanel>
                             </StackPanel>
                         </Border>
@@ -153,11 +174,16 @@
                             <StackPanel>
                                 <TextBlock Text="SHARE" Style="{StaticResource Caption}" />
                                 <TextBlock Style="{StaticResource Muted}" TextWrapping="Wrap"
-                                           Text="Send a profile to a friend as a single file, or add one you were sent." />
+                                           Text="Send a profile to a friend as text in a message, or as a file, or add one you were sent." />
                                 <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                    <Button x:Name="CopyButton" Content="Copy profile" Style="{StaticResource Secondary}" Padding="16,8" Margin="0,0,8,0" Click="CopyProfile_Click"
+                                            ToolTip="Put the selected profile on the clipboard as text, to paste into a chat." />
+                                    <Button Content="Paste profile" Style="{StaticResource Secondary}" Padding="16,8" Margin="0,0,16,0" Click="PasteProfile_Click"
+                                            ToolTip="Add a profile that was copied from G923 Mapper. You see what is in it before anything is saved." />
                                     <Button Content="Import…" Style="{StaticResource Secondary}" Padding="16,8" Margin="0,0,8,0" Click="Import_Click" />
                                     <Button Content="Export…" Style="{StaticResource Secondary}" Padding="16,8" Click="Export_Click" />
                                 </StackPanel>
+                                <TextBlock x:Name="ShareNote" Style="{StaticResource Muted}" TextWrapping="Wrap" Margin="0,8,0,0" Visibility="Collapsed" />
                             </StackPanel>
                         </Border>
                         <Border Style="{StaticResource Card}" Margin="0,12,0,0">
@@ -181,6 +207,11 @@
             <!-- ============================ Devices ============================ -->
             <TabItem Header="Devices">
                 <local:DevicesPanel x:Name="DevicesTab" Margin="0,12,0,0" />
+            </TabItem>
+
+            <!-- ============================ Test ============================ -->
+            <TabItem Header="Test">
+                <local:TestPanel x:Name="TestTab" Margin="0,12,0,0" />
             </TabItem>
         </TabControl>
 

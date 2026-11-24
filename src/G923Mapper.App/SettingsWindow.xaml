@@ -71,6 +71,19 @@
                         <TextBlock Style="{StaticResource Hint}" Margin="22,4,0,0"
                                    Text="Works from inside a game. While paused the controller stays connected but every control is released. Off by default; pick or type a shortcut such as Ctrl+Alt+F10." />
 
+                        <CheckBox x:Name="ModeHotkeyBox" Content="Switch to the next mode of a profile with a shortcut" Margin="0,14,0,0"
+                                  Checked="ModeHotkey_Changed" Unchecked="ModeHotkey_Changed" />
+                        <StackPanel Orientation="Horizontal" Margin="22,8,0,0">
+                            <ComboBox x:Name="ModeHotkeyCombo" IsEditable="True" Width="190" SelectionChanged="ModeHotkeyCombo_Changed" LostKeyboardFocus="ModeHotkeyCombo_LostFocus" />
+                            <TextBlock x:Name="ModeHotkeyMessage" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="14,0,0,0" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <TextBlock Style="{StaticResource Hint}" Margin="22,4,0,0"
+                                   Text="A profile can have modes (for example Shooting, Driving, Flying), each with its own rules and feel. This shortcut moves to the next one, from inside a game. A wheel button can do the same with a rule that sends to Mode:Next. Off by default." />
+                        <CheckBox x:Name="ModeBuzzBox" Content="Buzz the wheel when the mode changes (once for the first mode, twice for the second, and so on)" Margin="22,8,0,0"
+                                  Checked="ModeOptions_Changed" Unchecked="ModeOptions_Changed" />
+                        <CheckBox x:Name="ModeToastBox" Content="Show a notification when the mode changes" Margin="22,6,0,0"
+                                  Checked="ModeOptions_Changed" Unchecked="ModeOptions_Changed" />
+
                         <CheckBox x:Name="CombosBox" Content="Use wheel button combinations" Margin="0,14,0,0" Checked="Combos_Changed" Unchecked="Combos_Changed" />
                         <Grid Margin="22,8,0,0">
                             <Grid.ColumnDefinitions>
@@ -132,6 +145,13 @@
                             <TextBlock Text="Centring spring" VerticalAlignment="Center" />
                             <Slider x:Name="SpringSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="10" ValueChanged="Force_ValueChanged" VerticalAlignment="Center" />
                             <TextBlock x:Name="SpringText" Grid.Column="2" Style="{StaticResource ValueText}" />
+                        </Grid>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="Wheel friction" VerticalAlignment="Center" />
+                            <Slider x:Name="FrictionSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="10" ValueChanged="Force_ValueChanged" VerticalAlignment="Center"
+                                    ToolTip="A steady resistance to turning the wheel at any speed, like a heavier wheel. It does not pull back to centre." />
+                            <TextBlock x:Name="FrictionText" Grid.Column="2" Style="{StaticResource ValueText}" />
                         </Grid>
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="220" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>

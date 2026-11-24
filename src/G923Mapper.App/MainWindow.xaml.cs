@@ -85,6 +85,7 @@ public partial class MainWindow : Window
         RefreshProfiles();
         UpdateAutoInfo();
         DevicesTab.Initialise(_s);
+        TestTab.Initialise(_s);
 
         _timer.Tick += (_, _) => Tick();
         _timer.Start();
@@ -113,14 +114,16 @@ public partial class MainWindow : Window
         string detail = Service.Status;
         if (state == MapperState.Running)
         {
-            detail = $"Profile \"{snap?.ProfileName ?? "…"}\"" +
+            detail = $"Profile \"{snap?.ProfileName ?? "…"}\"" + (snap?.ModeName is { } modeName ? $"  ·  Mode: {modeName}" : "") +
                      (_s.Switcher.ActiveKey is not null ? $" (switched automatically: {_s.Switcher.ActiveExe} is {(Focused ? "in front" : "running")})" : "") +
                      (snap is not null && PadKindOf(snap.ProfileName) == PadKind.DualShock4 ? "  ·  virtual DualShock 4 connected" : "  ·  virtual Xbox 360 controller connected");
             if (snap is { Raw.Live: false }) detail += "\nMove the wheel a little to wake it. Until then it reads as centred.";
         }
         StatusDetail.Text = detail;
         ToggleButton.Content = Service.IsRunning ? "Stop" : "Start";
-        StatusTextChanged?.Invoke($"G923 Mapper: {title}");
+        StatusTextChanged?.Invoke(state == MapperState.Running && snap is not null && Service.ModeName is { } modeNow
+            ? $"G923 Mapper: {snap.ProfileName} / {modeNow}" : $"G923 Mapper: {title}");
+        ShowModes();
 
         if (snap is null)
         {
@@ -144,7 +147,7 @@ public partial class MainWindow : Window
         PadState pad = snap.Pad;
         PadView.Set(pad, PadKindOf(snap.ProfileName));
         KeyChips.Update(name => snap.Input.Get(name));
-        RefreshTips(snap.ProfileName);
+        RefreshTips(snap);
         var down = Enum.GetValues<PadButton>().Where(b => pad[b]).Select(b => b.ToString()).ToList();
         string seen = $"Game sees: left stick {pad.LeftX:+0;-0;0}  ·  right trigger {pad.RightTrigger}  ·  left trigger {pad.LeftTrigger}";
         if (down.Count > 0) seen += "  ·  " + string.Join(", ", down);
@@ -201,23 +204,69 @@ public partial class MainWindow : Window
         _s.Settings.Save();
     }
 
+    private string _modeKey = "";
+
+    /// <summary>The Mode strip on Home: a button for each mode of the running profile, the active one lit, and how to switch. Click one to switch to it.</summary>
+    private void ShowModes()
+    {
+        var names = Service.IsRunning ? Service.ModeNames : [];
+        string key = string.Join("|", names) + "#" + Service.ModeIndex + "#" + Store.Version + "#" + (Service.Latest?.ProfileName ?? "");
+        if (key == _modeKey) return;
+        _modeKey = key;
+        ModePanel.Visibility = names.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        ModeChips.Children.Clear();
+        if (names.Count == 0) return;
+        for (int i = 0; i < names.Count; i++)
+        {
+            string name = names[i];
+            bool active = i == Service.ModeIndex;
+            var b = new Button { Content = name, Padding = new Thickness(14, 6, 14, 6), Margin = new Thickness(0, 0, 6, 6), FontSize = 13, FontWeight = active ? FontWeights.Bold : FontWeights.Normal, ToolTip = active ? "The mode in use now." : "Switch to " + name + "." };
+            b.SetResourceReference(StyleProperty, "Secondary");
+            if (active)
+            {
+                b.SetResourceReference(BackgroundProperty, "Accent");
+                b.SetResourceReference(ForegroundProperty, "OnAccent");
+            }
+            b.Click += (_, _) => Service.RequestMode(name);
+            ModeChips.Children.Add(b);
+        }
+
+        var how = new List<string>();
+        if (Store.Get(Service.Latest?.ProfileName ?? "") is { } running)
+        {
+            var wheel = running.Rules.Concat(running.Modes.SelectMany(x => x.Rules))
+                .Where(r => Target.TryParse(r.To, out Target? t, out _) && t is { Kind: TargetKind.Mode }).Select(r => $"{r.From} ({r.To})").Distinct().ToList();
+            if (wheel.Count > 0) how.Add("wheel: " + string.Join(", ", wheel));
+        }
+        if (Settings.ModeHotkey.Enabled) how.Add("shortcut: " + Settings.ModeHotkey.Combo);
+        ModeHint.Text = how.Count > 0 ? "Switch with a click, or " + string.Join("; ", how) + "."
+            : "Switch with a click, or press Set switch button to choose a wheel button for it (or turn on the shortcut in Settings).";
+        SwitchButtonButton.Content = how.Any(h => h.StartsWith("wheel")) ? "Change switch button..." : "Set switch button...";
+    }
+
     private int _tipsVersion = -1;
     private string? _tipsProfile;
 
     /// <summary>The hover text of the controller picture: what feeds each control in the running profile. Rebuilt only when the profile or its file changed.</summary>
-    private void RefreshTips(string profileName)
+    private void RefreshTips(MapperSnapshot snap)
     {
-        if (_tipsVersion == Store.Version && _tipsProfile == profileName) return;
+        string key = snap.ProfileName + "|" + snap.ModeName;
+        if (_tipsVersion == Store.Version && _tipsProfile == key) return;
         _tipsVersion = Store.Version;
-        _tipsProfile = profileName;
-        PadKind kind = PadKindOf(profileName);
-        PadView.SetTips(PadTips.For(Store.Get(profileName), kind));
-        PadView.SetLabels(Store.Get(profileName) is { } shown ? PadControls.Labels(shown) : new Dictionary<string, string>());
-        KeyChips.Set(Store.Get(profileName) is { } withKeys ? KeyMappings.Of(withKeys) : []);
-        string note = KeyStrip.NoteFor(Store.Get(profileName));
+        _tipsProfile = key;
+        PadKind kind = PadKindOf(snap.ProfileName);
+        Profile? running = RunningProfile.Of(Store, snap);   // what the game gets now: the profile with its active mode
+        PadView.SetTips(PadTips.For(running, kind));
+        PadView.SetLabels(running is { } shown ? PadControls.Labels(shown) : new Dictionary<string, string>());
+        KeyChips.Set(running is { } withKeys ? KeyMappings.Of(withKeys) : []);
+        string note = KeyStrip.NoteFor(running);
         KeyNote.Text = note;
         KeyNote.Visibility = note.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
+
+    /// <summary>Which mode of the profile is active (-1 for a profile with no modes).</summary>
+    private static int ModeIndexOf(Profile profile, MapperSnapshot snap) =>
+        snap.ModeName is null ? -1 : profile.Modes.FindIndex(m => string.Equals(m.Name, snap.ModeName, StringComparison.OrdinalIgnoreCase));
 
     /// <summary>The running profile and its file, or false after telling the user why not.</summary>
     private bool TryRunningProfile(string title, out MapperSnapshot snap, out Profile profile, out string file)
@@ -241,16 +290,20 @@ public partial class MainWindow : Window
     public void EditKeyMapping(Rule? rule)
     {
         if (!TryRunningProfile("Keys and mouse", out MapperSnapshot snap, out Profile profile, out string file)) return;
-        var dlg = new KeyMapWindow(_s, profile, System.IO.Path.Combine(_s.ProfileDir, file), rule, () => Service.Latest) { Owner = this };
+        var dlg = new KeyMapWindow(_s, profile, System.IO.Path.Combine(_s.ProfileDir, file), rule, () => Service.Latest, ModeIndexOf(profile, snap)) { Owner = this };
         dlg.ShowDialog();
         if (dlg.Changed) { Store.Reload(file); AppendLog($"Changed the key and mouse mappings in {file}."); }
     }
+
+    private void SwitchButton_Click(object sender, RoutedEventArgs e) => AssignControl(PadControls.ModeSwitchKey);
 
     /// <summary>A control of the controller picture was clicked (here or in the Devices tab): open the assign window for it.</summary>
     public void AssignControl(string key)
     {
         if (!TryRunningProfile("Assign", out MapperSnapshot snap, out Profile profile, out string file)) return;
-        var dlg = new AssignWindow(_s, profile, System.IO.Path.Combine(_s.ProfileDir, file), key, PadKindOf(snap.ProfileName), () => Service.Latest) { Owner = this };
+        // The switch buttons belong to the profile itself, so they work in every mode; everything else is the active mode's.
+        int mode = key == PadControls.ModeSwitchKey ? -1 : ModeIndexOf(profile, snap);
+        var dlg = new AssignWindow(_s, profile, System.IO.Path.Combine(_s.ProfileDir, file), key, PadKindOf(snap.ProfileName), () => Service.Latest, mode) { Owner = this };
         bool ok = dlg.ShowDialog() == true;
         if (dlg.Changed) { Store.Reload(file); AppendLog($"Changed {PadControls.Title(key, PadKindOf(snap.ProfileName))} in {file}."); }
         if (ok && dlg.WantsEditor) { SelectTab("Profiles"); EditRules_Click(this, new RoutedEventArgs()); }
@@ -305,6 +358,11 @@ public partial class MainWindow : Window
             var last = Store.LastResult(f);
             bool usable = Store.Get(key) is not null;
             string mark = last is { Ok: true } ? "" : usable ? "  (last save has errors)" : "  (invalid)";
+            if (Store.Get(key) is { } shown)
+            {
+                if (shown.IsTemplate) mark += "  (template)";
+                else if (shown.Parent is not null && Templates.UpdateAvailable(shown, FindTemplate(shown.Parent.Name))) mark += "  (template update available)";
+            }
             return new ProfileItem(key, f, usable, key + mark);
         }).ToList();
 
@@ -472,7 +530,8 @@ public partial class MainWindow : Window
         Profile? served = Store.Get(item.Key);
         ProfileInfo.Text = served is null
             ? "This file has errors and cannot run yet."
-            : $"{served.Rules.Count} rules" + (served.Match.Exe.Count > 0 ? $"  ·  for {string.Join(", ", served.Match.Exe)}" : "");
+            : $"{served.Rules.Count} rules" + (served.Modes.Count > 0 ? $", {served.Modes.Count} modes" : "") + (served.Match.Exe.Count > 0 ? $"  ·  for {string.Join(", ", served.Match.Exe)}" : "")
+              + (string.IsNullOrWhiteSpace(served.Notes) ? "" : "\n" + served.Notes.Trim());
 
         if (result is not null)
         {
@@ -482,6 +541,7 @@ public partial class MainWindow : Window
                 issues.Insert(0, new Issue("The last save was rejected. The previous version is still running.", Amber));
         }
         IssueList.ItemsSource = issues;     // empty when all is well: no "no problems" noise
+        ShowTemplateInfo(served);
     }
 
     // ---------------------------------------------------------------- profile actions
@@ -496,7 +556,7 @@ public partial class MainWindow : Window
             return;
         }
         string path = System.IO.Path.Combine(_s.ProfileDir, item.File);
-        var dlg = new RuleEditorWindow(profile, _s.Devices, path, () => Service.Latest) { Owner = this };
+        var dlg = new RuleEditorWindow(profile, _s.Devices, path, () => Service.Latest, _s.Settings, FindTemplate) { Owner = this };
         if (dlg.ShowDialog() == true && dlg.Saved)
         {
             Store.Reload(item.File);
@@ -612,6 +672,182 @@ public partial class MainWindow : Window
         _selectAfterRefresh = key;
         Store.Reload(file);
         AppendLog($"Imported {file}" + (result.Warnings.Count > 0 ? $" ({result.Warnings.Count} warnings)." : "."));
+    }
+
+    // ---------------------------------------------------------------- templates
+
+    private Profile? FindTemplate(string name) =>
+        Store.Files.Select(f => Store.Get(f)).FirstOrDefault(p => p is { IsTemplate: true } && string.Equals(p.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    /// <summary>Under the profile on Home: which template it is based on, whether that template has changed, and the buttons for that.</summary>
+    private void ShowTemplateInfo(Profile? served)
+    {
+        if (served is null || (!served.IsTemplate && served.Parent is null)) { TemplatePanel.Visibility = Visibility.Collapsed; return; }
+        TemplatePanel.Visibility = Visibility.Visible;
+        if (served.IsTemplate)
+        {
+            int users = Store.Files.Select(f => Store.Get(f)).Count(p => p?.Parent is { } pl && string.Equals(pl.Name, served.Name, StringComparison.OrdinalIgnoreCase));
+            TemplateText.Text = users == 0 ? "A template: not used by any profile yet. Start one with From template on the Profiles tab."
+                : $"A template: {users} profile{(users == 1 ? "" : "s")} {(users == 1 ? "is" : "are")} based on it. They are offered the changes you make here, and take them only when you apply them.";
+            TemplateDiffButton.Visibility = TemplateUpdateButton.Visibility = Visibility.Collapsed;
+            return;
+        }
+        Profile? template = FindTemplate(served.Parent!.Name);
+        bool update = Templates.UpdateAvailable(served, template);
+        int diffs = Templates.Diff(served).Count;
+        TemplateText.Text = $"Based on the template \"{served.Parent.Name}\"" + (template is null ? " (that template is no longer in the profiles folder; this profile keeps its own copy)." : ".") +
+            $" {(diffs == 0 ? "It does everything the template does." : $"{diffs} thing{(diffs == 1 ? "" : "s")} {(diffs == 1 ? "is" : "are")} its own.")}" +
+            (update ? " The template has changed: an update is available." : "");
+        TemplateDiffButton.Visibility = Visibility.Visible;
+        TemplateUpdateButton.Visibility = update ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void NewFromTemplate_Click(object sender, RoutedEventArgs e)
+    {
+        var templates = Store.Files.Select(f => Store.Get(f)).Where(p => p is { IsTemplate: true }).Select(p => p!).ToList();
+        if (templates.Count == 0)
+        {
+            MessageBox.Show(this, "There are no templates yet. Use Save as template on a profile you like to make one.", "From template", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        bool Exists(string name) => Store.Get(name) is not null || File.Exists(System.IO.Path.Combine(_s.ProfileDir, Slug(name) + ".json"));
+        var dlg = new TemplatePickerWindow(templates, Exists) { Owner = this };
+        if (dlg.ShowDialog() != true || dlg.Result is null) return;
+        SaveNewProfile(dlg.Result);
+        AppendLog($"Created \"{dlg.Result.Name}\" from the template \"{dlg.Result.Parent!.Name}\".");
+    }
+
+    private void SaveAsTemplate_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProfileBox.SelectedItem is not ProfileItem item || Store.Get(item.Key) is not Profile profile)
+        {
+            MessageBox.Show(this, "Choose a profile that loads without errors first.", "Save as template", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        string? name = Prompt.Ask(this, "Save as template", "Name for the new template. It keeps this profile's settings and rules, with no game attached.", profile.Name + " template")?.Trim();
+        if (string.IsNullOrEmpty(name)) return;
+        if (Store.Get(name) is not null || File.Exists(System.IO.Path.Combine(_s.ProfileDir, Slug(name) + ".json")))
+        {
+            MessageBox.Show(this, "A profile or template with that name already exists. Choose another name.", "Save as template", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        SaveNewProfile(Templates.SaveAsTemplate(profile, name));
+        AppendLog($"Saved \"{profile.Name}\" as the template \"{name}\".");
+    }
+
+    private void TemplateDiff_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProfileBox.SelectedItem is not ProfileItem item || Store.Get(item.Key) is not { Parent: not null } profile) return;
+        string path = System.IO.Path.Combine(_s.ProfileDir, item.File);
+        Profile working = ProfileLoader.Parse(ProfileWriter.ToJson(profile), _s.Devices).Profile ?? profile;   // a private copy, changed one reset at a time
+        bool Reset(TemplateDiff diff)
+        {
+            // Putting the safety mode back to Standard is the same decision as choosing it, so it gets the same one-time warning.
+            bool toStandard = (diff.Key == "safety" && diff.Template == ProfileSafety.Standard) || (diff.Key == "outputs.keyboard" && diff.Template == "on");
+            if (toStandard && !SafetyPrompts.ConfirmStandard(this, _s.Settings)) return false;
+            Templates.Reset(working, diff);
+            File.WriteAllText(path, ProfileWriter.ToJson(working));
+            Store.Reload(item.File);
+            AppendLog($"Put \"{diff.Label}\" back to the template's in {item.File}.");
+            return true;
+        }
+        new TemplateDiffWindow(working.Name, working.Parent!.Name, () => Templates.Diff(working), Reset) { Owner = this }.ShowDialog();
+    }
+
+    private void TemplateUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProfileBox.SelectedItem is not ProfileItem item || Store.Get(item.Key) is not { Parent: not null } profile) return;
+        if (FindTemplate(profile.Parent!.Name) is not { } template)
+        {
+            MessageBox.Show(this, $"The template \"{profile.Parent.Name}\" is not in the profiles folder any more, so there is nothing to update from.", "Update from template", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        int own = Templates.Diff(profile).Count;
+        if (MessageBox.Show(this,
+                $"Update \"{profile.Name}\" from the template \"{template.Name}\"?\n\nThe template has changed. The changes are applied to this profile; the {own} thing{(own == 1 ? "" : "s")} it does its own way {(own == 1 ? "is" : "are")} kept. The old version stays in Earlier versions.",
+                "Update from template", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.OK) != MessageBoxResult.OK) return;
+        ProfileLoadResult result = Templates.ApplyUpdate(profile, template, _s.Devices);
+        if (!result.Ok)
+        {
+            MessageBox.Show(this, "The updated profile would not be valid, so nothing was changed:\n\n" + string.Join("\n", result.Errors.Take(6)), "Update from template", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        File.WriteAllText(System.IO.Path.Combine(_s.ProfileDir, item.File), ProfileWriter.ToJson(result.Profile!));
+        Store.Reload(item.File);
+        AppendLog($"Updated \"{profile.Name}\" from the template \"{template.Name}\".");
+    }
+
+    // ---------------------------------------------------------------- copy and paste a profile
+
+    private void CopyProfile_Click(object sender, RoutedEventArgs e)
+    {
+        var menu = new ContextMenu { PlacementTarget = CopyButton, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+        MenuItem Item(string header, bool calibration, bool encode)
+        {
+            var mi = new MenuItem { Header = header };
+            mi.Click += (_, _) => CopyProfileAs(calibration, encode);
+            return mi;
+        }
+        menu.Items.Add(Item("As text, with my wheel calibration", true, true));
+        menu.Items.Add(Item("As text, profile only", false, true));
+        menu.Items.Add(Item("As plain JSON (readable)", true, false));
+        menu.IsOpen = true;
+    }
+
+    private void CopyProfileAs(bool withCalibration, bool encode)
+    {
+        if (ProfileBox.SelectedItem is not ProfileItem item || Store.Get(item.Key) is not Profile profile)
+        {
+            MessageBox.Show(this, "Choose a profile that loads without errors first.", "Copy profile", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        DeviceMap? calibration = withCalibration ? _s.Devices.Resolve(profile.Device, Service.WheelUsbIds) : null;
+        string text = ProfileShare.Export(profile, calibration, encode);
+        try { Clipboard.SetText(text); }
+        catch (System.Runtime.InteropServices.ExternalException ex)
+        {
+            MessageBox.Show(this, "Windows would not let the clipboard be used just now: " + ex.Message, "Copy profile", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        string edition = calibration is null ? "" : $", with the {WheelEditions.Label(WheelEditions.Of(calibration))} calibration";
+        ShareNote.Text = $"Copied \"{profile.Name}\"{edition} ({text.Length:N0} characters). Paste it into a message.";
+        ShareNote.Visibility = Visibility.Visible;
+        AppendLog($"Copied profile \"{profile.Name}\" to the clipboard.");
+    }
+
+    private void PasteProfile_Click(object sender, RoutedEventArgs e)
+    {
+        string text;
+        try { text = Clipboard.ContainsText() ? Clipboard.GetText() : ""; }
+        catch (System.Runtime.InteropServices.ExternalException ex)
+        {
+            MessageBox.Show(this, "Windows would not let the clipboard be used just now: " + ex.Message, "Paste profile", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        ShareImport import = ProfileShare.Import(text, _s.Devices);
+        if (!import.Ok)
+        {
+            MessageBox.Show(this, "Nothing was imported.\n\n" + string.Join("\n", import.Errors.Take(6)), "Paste profile", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        WheelEdition connected = Service.WheelUsbIds is { } ids ? WheelEditions.Of(ids.Vid, ids.Pid) : WheelEdition.Unknown;
+        bool Exists(string name) => Store.Get(name) is not null || File.Exists(System.IO.Path.Combine(_s.ProfileDir, Slug(name) + ".json"));
+        var dlg = new ShareImportWindow(import, connected, _s.Devices, Exists) { Owner = this };
+        if (dlg.ShowDialog() != true) return;
+
+        Profile profile = import.Profile!;
+        profile.Name = dlg.ChosenName;
+        if (dlg.ApplyCalibration && import.Calibration is { } cal)
+        {
+            DeviceRegistry.SaveEntry(_s.DevicesPath, cal);
+            _s.Devices.Add(cal);
+            Store.ReloadAll();   // profiles are re-checked against the new device map
+            AppendLog($"Added the wheel calibration \"{cal.Name}\" that came with the profile.");
+        }
+        SaveNewProfile(profile);
+        AppendLog($"Imported \"{profile.Name}\" from the clipboard" + (import.TurnedOff.Count > 0 ? " (keyboard and mouse output left off)." : "."));
     }
 
     private void Export()

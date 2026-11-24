@@ -36,6 +36,10 @@ public sealed class AppSettings
     /// <summary>Profile to run (file name without .json).</summary>
     public string Profile { get; set; } = "default";
     public bool WarnedAboutTray { get; set; }
+    /// <summary>The user has been told, once, that Standard safety allows synthetic keyboard and mouse input that anti-cheat may treat differently, and accepted it.</summary>
+    public bool WarnedAboutStandard { get; set; }
+    /// <summary>The starter genre templates have been written to the profile folder (once; they are never put back).</summary>
+    public bool TemplatesSeeded { get; set; }
     /// <summary>
     /// A GitHub repository ("owner/name") whose releases to compare with, when the user presses Check for updates. Empty (the default) means the
     /// app never contacts anything. It is never checked automatically.
@@ -64,6 +68,14 @@ public sealed class AppSettings
 
     /// <summary>A global shortcut that pauses and resumes the virtual controller. Off by default.</summary>
     public HotkeySettings Hotkey { get; set; } = new();
+    /// <summary>The optional shortcut that moves a profile to its next mode (Shooting, Driving...). Off by default.</summary>
+    public HotkeySettings ModeHotkey { get; set; } = new() { Combo = "Ctrl+Alt+F11" };
+    /// <summary>Buzz the wheel when the mode changes: once for the first mode, twice for the second and so on.</summary>
+    public bool ModeBuzz { get; set; } = true;
+    /// <summary>Show a Windows notification when the mode changes.</summary>
+    public bool ModeToast { get; set; } = true;
+    /// <summary>Which view the pop-out window was last in: Full, Compact, Mode, Controller or Rules.</summary>
+    public string MiniView { get; set; } = "Full";
 
     /// <summary>Wheel-button combinations for pausing and for switching profile. Off by default.</summary>
     public ComboSettings Combos { get; set; } = new();

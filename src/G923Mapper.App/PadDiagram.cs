@@ -32,11 +32,14 @@ public sealed class PadDiagram : FrameworkElement
 
     private IReadOnlyDictionary<string, string> _labels = new Dictionary<string, string>();
 
+    /// <summary>Tag the controls with their wheel controls on this picture whatever the "Show mappings" choice is (the pop-out's Controller view).</summary>
+    public bool AlwaysLabels { get; set; }
+
     /// <summary>The word to show on each control while <see cref="ShowLabels"/> is on (key to text).</summary>
     public void SetLabels(IReadOnlyDictionary<string, string> labels)
     {
         _labels = labels;
-        if (ShowLabels) InvalidateVisual();
+        if (ShowLabels || AlwaysLabels) InvalidateVisual();
     }
 
     private void OnTheme() => Dispatcher.BeginInvoke(InvalidateVisual);
@@ -388,7 +391,7 @@ public sealed class PadDiagram : FrameworkElement
         }
 
         // Tags: the wheel control behind each mapped control, on a dark pill so it reads on any colour.
-        if (ShowLabels)
+        if (ShowLabels || AlwaysLabels)
             foreach (var (key, text) in _labels)
             {
                 if (PadLayout.Of(key, _kind) is not { } at) continue;

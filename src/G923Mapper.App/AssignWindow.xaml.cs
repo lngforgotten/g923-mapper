@@ -8,6 +8,17 @@ using System.Windows.Threading;
 
 namespace G923Mapper.App;
 
+/// <summary>The profile as the game is getting it right now: the profile with its active mode laid over it. The pictures and strips show this.</summary>
+public static class RunningProfile
+{
+    public static Profile? Of(ProfileStore store, MapperSnapshot snap)
+    {
+        if (store.Get(snap.ProfileName) is not { } profile) return null;
+        int mode = snap.ModeName is null ? -1 : profile.Modes.FindIndex(m => string.Equals(m.Name, snap.ModeName, StringComparison.OrdinalIgnoreCase));
+        return ProfileModes.Resolve(profile, mode);
+    }
+}
+
 /// <summary>The hover text of the controller picture: what feeds each control in a profile.</summary>
 public static class PadTips
 {
@@ -39,7 +50,9 @@ public partial class AssignWindow : Window
     private readonly PadKind _kind;
     private readonly string _path;
     private readonly Func<MapperSnapshot?> _latest;
-    private readonly Profile _profile;
+    private readonly Profile _full;      // the profile as it is in the file, modes and all
+    private readonly Profile _profile;   // the rules in force in the mode being shown: what is being changed
+    private readonly int _mode;
     private readonly List<Row> _rows = new();
     private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(40) };
     private Row? _recording;
@@ -51,7 +64,7 @@ public partial class AssignWindow : Window
     /// <summary>True when the user asked for the full rule editor instead.</summary>
     public bool WantsEditor { get; private set; }
 
-    public AssignWindow(AppServices services, Profile profile, string path, string controlKey, PadKind kind, Func<MapperSnapshot?> latest)
+    public AssignWindow(AppServices services, Profile profile, string path, string controlKey, PadKind kind, Func<MapperSnapshot?> latest, int mode = -1)
     {
         InitializeComponent();
         _s = services;
@@ -59,10 +72,12 @@ public partial class AssignWindow : Window
         _path = path;
         _latest = latest;
         // Work on a copy, so nothing changes in the running profile until a save is written and reloaded.
-        _profile = ProfileLoader.Parse(ProfileWriter.ToJson(profile), services.Devices).Profile ?? profile;
+        _full = ProfileLoader.Parse(ProfileWriter.ToJson(profile), services.Devices).Profile ?? profile;
+        _mode = mode;
+        _profile = ProfileModes.Resolve(_full, mode);   // inside a mode, a change is a change to that mode only
 
         TxtTitle.Text = PadControls.Title(controlKey, kind);
-        TxtProfile.Text = $"Profile \"{profile.Name}\"";
+        TxtProfile.Text = $"Profile \"{profile.Name}\"" + (mode >= 0 ? $", mode \"{ProfileModes.NameAt(profile, mode)}\". A change here applies to this mode only." : "");
         foreach (PadSlot slot in PadControls.Slots(controlKey, kind)) AddRow(slot);
         RefreshRows();
 
@@ -157,7 +172,8 @@ public partial class AssignWindow : Window
 
     private bool Save()
     {
-        string json = ProfileWriter.ToJson(_profile);
+        if (_mode >= 0) ProfileModes.Capture(_full, _mode, _profile);   // keep only what differs from the profile's own rules
+        string json = ProfileWriter.ToJson(_full);
         if (!ProfileLoader.Parse(json, _s.Devices).Ok) return false;
         try { File.WriteAllText(_path, json); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { return false; }

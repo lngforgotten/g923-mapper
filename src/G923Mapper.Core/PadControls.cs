@@ -26,9 +26,16 @@ public static class PadControls
         return best;
     }
 
+    /// <summary>
+    /// Not a control of the picture but a place in the assign window: the wheel buttons that move between a profile's modes (rules sending to
+    /// Mode:Next and Mode:Previous). Opened from the Mode strip on Home.
+    /// </summary>
+    public const string ModeSwitchKey = "ModeSwitch";
+
     /// <summary>A name for the control: the Xbox or PlayStation wording of its step, or "Left stick" for a stick.</summary>
     public static string Title(string key, PadKind kind)
     {
+        if (key == ModeSwitchKey) return "Mode switch buttons";
         if (key == "LeftStick") return "Left stick";
         if (key == "RightStick") return "Right stick";
         var step = RemapSteps.All.FirstOrDefault(s => s.Target.Equals(key, StringComparison.OrdinalIgnoreCase));
@@ -40,6 +47,8 @@ public static class PadControls
     {
         switch (key)
         {
+            case ModeSwitchKey:
+                return [new("Next mode (cycles round)", "Mode:Next"), new("Previous mode", "Mode:Previous")];
             case "LeftStick":
                 return [new("Left stick, left and right", "LeftStickX"), new("Left stick, up and down", "LeftStickY"),
                         new(kind == PadKind.DualShock4 ? "Left stick click (L3)" : "Left stick click", "Button:LeftThumb")];
@@ -57,7 +66,7 @@ public static class PadControls
         var map = new Dictionary<string, List<Rule>>(StringComparer.OrdinalIgnoreCase);
         foreach (Rule r in profile.Rules)
         {
-            if (!Target.TryParse(r.To, out Target? t, out _) || t is null || t.Pad != 1 || t.Kind == TargetKind.Key) continue;
+            if (!Target.TryParse(r.To, out Target? t, out _) || t is null || t.Pad != 1 || t.Kind is TargetKind.Key or TargetKind.Mode) continue;
             string key = PadLayout.KeyOf(r.To);
             if (!map.TryGetValue(key, out var list)) map[key] = list = new();
             list.Add(r);

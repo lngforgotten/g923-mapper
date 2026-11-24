@@ -67,6 +67,12 @@ public partial class App : Application
             AppLog.Info($"Anti-cheat list: {string.Join(", ", AntiCheatList.Current.Names)}.");
 
             DefaultProfiles.EnsureWritten(profileDir);
+            if (!settings.TemplatesSeeded)
+            {
+                try { StarterTemplates.WriteMissing(profileDir); } catch (IOException ex) { AppLog.Warn("Could not write the starter templates: " + ex.Message); }
+                settings.TemplatesSeeded = true;
+                settings.Save();
+            }
             var store = new ProfileStore(profileDir, devices) { HistoryRoot = AppSettings.HistoryDir };
             var switcher = new AutoProfileSwitcher(AutoProfileSwitcher.FromStore(store), foreground: ForegroundWindow.ExeName);
             var service = new MapperService(devices, store, () => _hwnd)
@@ -109,6 +115,8 @@ public partial class App : Application
 
             // The optional shortcut that pauses and resumes the controller, and the "release when the game is not in front" option.
             _hotkeys = new HotkeyManager(_hwnd, () => _window.Dispatcher.BeginInvoke(TogglePause));
+            _modeHotkeys = new HotkeyManager(_hwnd, () => service.RequestMode("Next"), 0x6924);   // the loop does the switching, from any thread
+            service.ModeChanged += OnModeChanged;
             _services.ApplyInputOptions = ApplyInputOptions;
             service.Frame += OnFrame;
             ApplyInputOptions();
@@ -254,6 +262,35 @@ public partial class App : Application
     }
 
     private HotkeyManager? _hotkeys;
+    private HotkeyManager? _modeHotkeys;
+
+    /// <summary>A mode was switched: a Windows notification, if the user wants one. (The wheel buzz is done by the mapper itself.)</summary>
+    private void OnModeChanged(string? mode, int count, bool switched)
+    {
+        if (!switched || mode is null || _services is not { } s || !s.Settings.ModeToast) return;
+        string profile = s.Service.Latest?.ProfileName ?? "";
+        _window?.Dispatcher.BeginInvoke(() => _tray?.ShowBalloon($"Mode: {mode}", profile.Length > 0 ? $"{profile} ({s.Service.ModeIndex + 1} of {count})" : $"{s.Service.ModeIndex + 1} of {count}"));
+    }
+
+    /// <summary>The optional shortcut that moves to the next mode, and the buzz setting.</summary>
+    private void ApplyModeOptions(AppServices s)
+    {
+        s.Service.ModeBuzz = s.Settings.ModeBuzz;
+        s.ModeHotkeyProblem = "";
+        if (_modeHotkeys is null) return;
+        if (!s.Settings.ModeHotkey.Enabled) { _modeHotkeys.Unregister(); return; }
+        if (!Hotkey.TryParse(s.Settings.ModeHotkey.Combo, out Hotkey? key, out string? why))
+        {
+            _modeHotkeys.Unregister();
+            s.ModeHotkeyProblem = "That shortcut cannot be used: " + why;
+        }
+        else if (!_modeHotkeys.Register(key!))
+        {
+            s.ModeHotkeyProblem = $"{key} is already used by another program (or by the pause shortcut). Pick a different one.";
+            AppLog.Warn(s.ModeHotkeyProblem);
+        }
+        else AppLog.Info($"Mode shortcut registered: {key}.");
+    }
 
     // Per-profile "hide the wheel": a profile can ask for the real wheel to be hidden from games while it is in use.
     private readonly WheelVisibilityTracker _visibility = new();
@@ -346,6 +383,7 @@ public partial class App : Application
         s.Service.ReleaseWhenGameNotInFront = s.Settings.ReleaseWhenGameNotInFront;
         s.Service.AutoCentre = s.Settings.AutoCentre;
         BuildCombos();
+        ApplyModeOptions(s);
         s.HotkeyProblem = "";
         if (_hotkeys is null) return;
 
@@ -411,6 +449,7 @@ public partial class App : Application
             if (_window is not null) _window.Exiting = true;
             _services?.Switcher.Dispose();
             _hotkeys?.Dispose();
+            _modeHotkeys?.Dispose();
             _services?.Service.Stop();       // removes the virtual pad and releases any held keys
             RestoreWheelOnExit();
             _tray?.Dispose();

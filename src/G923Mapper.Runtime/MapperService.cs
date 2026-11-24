@@ -8,6 +8,18 @@ public enum MapperState { Stopped, WaitingForWheel, Running, Error }
 /// <summary>Everything the UI wants to show about one moment of the mapping loop.</summary>
 public sealed record MapperSnapshot(RawInput Raw, InputFrame Input, PadState Pad, string ProfileName, DeviceMap Device)
 {
+    /// <summary>
+    /// What the profile would send, before it is held back (paused, or the game not in front). <see cref="Pad"/> is what was really sent, which is
+    /// neutral while held back; this is for the test page, which shows the profile working even with the output paused. Null when not known.
+    /// </summary>
+    public PadState? Intended { get; init; }
+
+    /// <summary>The name of the mode the profile is in right now (Shooting, Driving...), or null when the profile has no modes.</summary>
+    public string? ModeName { get; init; }
+
+    /// <summary>What each active rule did this frame (see <see cref="MappingEngine.Readings"/>).</summary>
+    public IReadOnlyList<RuleReading> Readings { get; init; } = [];
+
     /// <summary>The latest raw reading of each connected extra device, by device name.</summary>
     public IReadOnlyDictionary<string, RawInput> ExtraRaw { get; init; } = new Dictionary<string, RawInput>();
 }
@@ -44,6 +56,9 @@ public sealed class MapperService : IDisposable
     public (byte Heavy, byte Light) RumbleNow => ((byte)_rumbleLarge, (byte)_rumbleSmall);
     private int _testRequested;
     private long _testUntil, _testStart;
+    private long _buzzStart;
+    private int _buzzPulses;
+    private const int BuzzOnMs = 130, BuzzOffMs = 110;
     private bool _testLogged;
     private volatile IReadOnlyList<(string Name, bool Connected)> _extraStatus = [];
 
@@ -114,6 +129,41 @@ public sealed class MapperService : IDisposable
 
     /// <summary>Re-read the device list and reconnect everything (after extra devices or force feedback mode change).</summary>
     public void Restart() => _restart = true;
+
+    // ---------------------------------------------------------------- modes
+
+    private volatile string[] _modeNames = [];
+    private volatile int _modeIndex = -1;
+    private string? _pendingMode;
+    private int _buzzRequest;
+
+    /// <summary>The names of the running profile's modes, in order (empty when it has none).</summary>
+    public IReadOnlyList<string> ModeNames => _modeNames;
+
+    /// <summary>Which mode is active (an index into <see cref="ModeNames"/>), or -1 when the profile has no modes.</summary>
+    public int ModeIndex => _modeIndex;
+
+    /// <summary>The active mode's name, or null.</summary>
+    public string? ModeName { get { var names = _modeNames; int i = _modeIndex; return i >= 0 && i < names.Length ? names[i] : null; } }
+
+    /// <summary>Buzz the wheel when the mode changes, once for the first mode, twice for the second and so on, so it can be felt without looking.</summary>
+    public volatile bool ModeBuzz = true;
+
+    /// <summary>Raised on the service thread when the active mode changes or a profile with different modes starts: the mode's name (null = none), how many modes there are, and whether the user switched (true) rather than a profile just starting (false).</summary>
+    public event Action<string?, int, bool>? ModeChanged;
+
+    /// <summary>
+    /// Ask for another mode: "Next", "Previous" or a mode's name. Done by the loop on its next turn, the same way as a wheel button that does it.
+    /// Ignored if the running profile has no such mode.
+    /// </summary>
+    public void RequestMode(string request) => Volatile.Write(ref _pendingMode, request);
+
+    private void PublishModes(Profile p, int index, bool switched = false)
+    {
+        _modeNames = p.Modes.Select(x => x.Name).ToArray();
+        _modeIndex = index;
+        ModeChanged?.Invoke(ProfileModes.NameAt(p, index), p.Modes.Count, switched);
+    }
 
     /// <summary>Shake the wheel briefly so the user can feel that force feedback works.</summary>
     public void TestForce() => Interlocked.Exchange(ref _testRequested, 1);
@@ -311,9 +361,13 @@ public sealed class MapperService : IDisposable
             IKeySink? keys = null;           // created the first time a profile with keyboard output runs
             bool keyboardWasOn = false;
             long nextScan = 0;
-            var engine = new MappingEngine(profile, device, _devices);
+            int mode = ProfileModes.Keep(profile, null);   // a profile starts in its first mode
+            Profile active = ProfileModes.Resolve(profile, mode);
+            var engine = new MappingEngine(active, device, _devices);
             bool keyboardAllowed = ProfileSafety.KeyboardAllowed(profile);   // checked when a profile loads, not every frame
-            _profileForce = profile.Force; RefreshEffectiveForce();
+            _profileForce = active.Force; RefreshEffectiveForce();
+            PublishModes(profile, mode);
+            if (mode >= 0) Emit($"Mode: {ProfileModes.NameAt(profile, mode)}.");
             int seenVersion = _store.Version;
             _profileChanged = false;
             var clock = Stopwatch.StartNew();
@@ -343,11 +397,18 @@ public sealed class MapperService : IDisposable
                         }
                         // Keep a centre that was set at runtime across reloads of the same device.
                         if (freshDevice.Axes.TryGetValue("wheel", out var w) && device.Axes.TryGetValue("wheel", out var old)) w.Centre = old.Centre;
+                        // The same profile edited keeps its mode (if it is still there); a different profile starts in its first.
+                        bool sameProfile = string.Equals(fresh.Name, profile.Name, StringComparison.OrdinalIgnoreCase);
+                        string? modeBefore = ProfileModes.NameAt(profile, mode);
                         profile = fresh;
                         device = freshDevice;
-                        engine = new MappingEngine(profile, device, _devices);
+                        mode = ProfileModes.Keep(profile, sameProfile ? modeBefore : null);
+                        active = ProfileModes.Resolve(profile, mode);
+                        engine = new MappingEngine(active, device, _devices);
                         keyboardAllowed = ProfileSafety.KeyboardAllowed(profile);
-                        _profileForce = profile.Force; RefreshEffectiveForce();
+                        _profileForce = active.Force; RefreshEffectiveForce();
+                        PublishModes(profile, mode);
+                        if (mode >= 0) Emit($"Mode: {ProfileModes.NameAt(profile, mode)}.");
                         heldNotice = null;
                         Set(MapperState.Running, $"Running \"{profile.Name}\"");
                         Emit($"Now running \"{profile.Name}\" ({profile.Rules.Count} rules).");
@@ -410,6 +471,28 @@ public sealed class MapperService : IDisposable
                 PadState state = engine.Evaluate(input, clock.ElapsedMilliseconds);
                 long nowMs = clock.ElapsedMilliseconds;
 
+                // A wheel button, the shortcut or a click can ask for another mode. The new mode starts fresh: everything the old one
+                // held (keys, toggles) is let go, and what is already held down is not counted as a new press.
+                string? modeRequest = Interlocked.Exchange(ref _pendingMode, null);
+                string? ruleRequest = engine.TakeModeRequest();
+                modeRequest ??= ruleRequest;
+                if (modeRequest is not null && profile.Modes.Count > 0)
+                {
+                    int to = ProfileModes.Resolve(profile, modeRequest, mode);
+                    if (to >= 0 && to != mode)
+                    {
+                        mode = to;
+                        active = ProfileModes.Resolve(profile, mode);
+                        engine = new MappingEngine(active, device, _devices);
+                        engine.Prime(input);
+                        _profileForce = active.Force; RefreshEffectiveForce();
+                        state = engine.Evaluate(input, nowMs);
+                        PublishModes(profile, mode, switched: true);
+                        Emit($"Mode: {ProfileModes.NameAt(profile, mode)}.");
+                        if (ModeBuzz) Interlocked.Exchange(ref _buzzRequest, mode + 1);
+                    }
+                }
+
                 // Paused, or the game is running but not in front: send a neutral controller (the rules keep tracking the wheel).
                 if (nowMs >= nextGate)
                 {
@@ -425,6 +508,7 @@ public sealed class MapperService : IDisposable
                     Set(MapperState.Running, held ?? $"Running \"{profile.Name}\"");
                     Emit(held is null ? "Controller back on." : held);
                 }
+                PadState intended = state;
                 if (held is not null) state = new PadState();
 
                 // Only talk to the driver when something changed (plus a regular heartbeat).
@@ -461,7 +545,7 @@ public sealed class MapperService : IDisposable
                 if (clock.ElapsedMilliseconds - lastFrame >= 33)
                 {
                     lastFrame = clock.ElapsedMilliseconds;
-                    var snap = new MapperSnapshot(raw, input, state, profile.Name, device) { ExtraRaw = extraRaw ?? new() };
+                    var snap = new MapperSnapshot(raw, input, state, profile.Name, device) { ExtraRaw = extraRaw ?? new(), Intended = intended, Readings = engine.Readings(), ModeName = ProfileModes.NameAt(profile, mode) };
                     Latest = snap;
                     Frame?.Invoke(snap);
                 }
@@ -517,16 +601,31 @@ public sealed class MapperService : IDisposable
         if (Interlocked.Exchange(ref _testRequested, 0) == 1)
         {
             _testStart = nowMs;
-            _testUntil = nowMs + 2200;
+            _testUntil = nowMs + 3000;
             _testLogged = false;
         }
         f.SetSpring(s.SpringPercent);
-        if (nowMs < _testUntil)
+
+        // The mode buzz: one short pulse of the heavy motor for the first mode, two for the second, and so on.
+        int buzz = Interlocked.Exchange(ref _buzzRequest, 0);
+        if (buzz > 0) { _buzzStart = nowMs; _buzzPulses = Math.Clamp(buzz, 1, ProfileModes.MaxModes); }
+        bool inBuzz = _buzzPulses > 0 && nowMs - _buzzStart < _buzzPulses * (BuzzOnMs + BuzzOffMs);
+        if (!inBuzz) _buzzPulses = 0;
+        bool inTest = nowMs < _testUntil;
+        long testTime = nowMs - _testStart;
+        // The test ends with a moment of friction on its own, so it can be felt by turning the wheel.
+        f.SetFriction(inTest && testTime >= 2200 ? Math.Max(s.FrictionPercent, 60) : s.FrictionPercent);
+        if (inBuzz && !inTest)
         {
-            // Heavy motor, then light motor, then both, so each can be felt on its own.
-            long t = nowMs - _testStart;
-            byte large = t < 800 || t >= 1600 ? (byte)255 : (byte)0;
-            byte small = t < 800 ? (byte)0 : (byte)255;
+            bool on = (nowMs - _buzzStart) % (BuzzOnMs + BuzzOffMs) < BuzzOnMs;
+            f.SetRumble(on ? (byte)255 : (byte)0, (byte)0, Math.Max(s.RumblePercent, 70));
+        }
+        else if (inTest)
+        {
+            // Heavy motor, then light motor, then both, then (rumble off) friction, so each can be felt on its own.
+            long t = testTime;
+            byte large = t >= 2200 ? (byte)0 : t < 800 || t >= 1600 ? (byte)255 : (byte)0;
+            byte small = t >= 2200 ? (byte)0 : t < 800 ? (byte)0 : (byte)255;
             f.SetRumble(large, small, Math.Max(s.RumblePercent, 40));
             if (!_testLogged && t > 300)
             {

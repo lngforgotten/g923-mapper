@@ -31,6 +31,12 @@ public partial class SettingsWindow : Window
         UnhideBox.IsChecked = _s.Settings.UnhideWheelOnExit;
         AutoCentreBox.IsChecked = _s.Settings.AutoCentre;
         ReleaseBox.IsChecked = _s.Settings.ReleaseWhenGameNotInFront;
+        ModeHotkeyBox.IsChecked = _s.Settings.ModeHotkey.Enabled;
+        ModeHotkeyCombo.ItemsSource = Hotkey.Presets;
+        ModeHotkeyCombo.Text = _s.Settings.ModeHotkey.Combo;
+        ModeHotkeyMessage.Text = !_s.Settings.ModeHotkey.Enabled ? "" : _s.ModeHotkeyProblem.Length > 0 ? _s.ModeHotkeyProblem : $"Active: {_s.Settings.ModeHotkey.Combo}";
+        ModeBuzzBox.IsChecked = _s.Settings.ModeBuzz;
+        ModeToastBox.IsChecked = _s.Settings.ModeToast;
         HotkeyBox.IsChecked = _s.Settings.Hotkey.Enabled;
         CombosBox.IsChecked = _s.Settings.Combos.Enabled;
         ShowCombos();
@@ -51,6 +57,7 @@ public partial class SettingsWindow : Window
         FfbBox.IsChecked = f.Enabled;
         RumbleSlider.Value = f.RumblePercent;
         SpringSlider.Value = f.SpringPercent;
+        FrictionSlider.Value = f.FrictionPercent;
         StyleBox.ItemsSource = new[] { "Smooth", "Sharp", "Rough" };
         StyleBox.SelectedIndex = ForceMath.NormaliseStyle(f.Style) == ForceMath.StyleSharp ? 1 : ForceMath.NormaliseStyle(f.Style) == ForceMath.StyleRough ? 2 : 0;
         MotorsBox.ItemsSource = new[] { "Both (heavy and light)", "Heavy only", "Light only" };
@@ -227,6 +234,48 @@ public partial class SettingsWindow : Window
         HotkeyMessage.Text = !_s.Settings.Hotkey.Enabled ? "" : _s.HotkeyProblem.Length > 0 ? _s.HotkeyProblem : $"Active: {_s.Settings.Hotkey.Combo}";
     }
 
+    private void ModeHotkey_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _s.Settings.ModeHotkey.Enabled = ModeHotkeyBox.IsChecked == true;
+        ApplyModeHotkeyText();
+    }
+
+    private void ModeHotkeyCombo_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || ModeHotkeyCombo.SelectedItem is not string) return;
+        ApplyModeHotkeyText(ModeHotkeyCombo.SelectedItem as string);
+    }
+
+    private void ModeHotkeyCombo_LostFocus(object sender, System.Windows.Input.KeyboardFocusChangedEventArgs e)
+    {
+        if (!_loading) ApplyModeHotkeyText();
+    }
+
+    private void ApplyModeHotkeyText(string? chosen = null)
+    {
+        string text = (chosen ?? ModeHotkeyCombo.Text).Trim();
+        if (Hotkey.TryParse(text, out Hotkey? key, out string? why))
+            _s.Settings.ModeHotkey.Combo = key!.ToString();
+        else if (_s.Settings.ModeHotkey.Enabled)
+        {
+            ModeHotkeyMessage.Text = "That shortcut cannot be used: " + why;
+            return;
+        }
+        _s.Settings.Save();
+        _s.ApplyInputOptions?.Invoke();
+        ModeHotkeyMessage.Text = !_s.Settings.ModeHotkey.Enabled ? "" : _s.ModeHotkeyProblem.Length > 0 ? _s.ModeHotkeyProblem : $"Active: {_s.Settings.ModeHotkey.Combo}";
+    }
+
+    private void ModeOptions_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _s.Settings.ModeBuzz = ModeBuzzBox.IsChecked == true;
+        _s.Settings.ModeToast = ModeToastBox.IsChecked == true;
+        _s.Settings.Save();
+        _s.ApplyInputOptions?.Invoke();
+    }
+
     // ---------------------------------------------------------------- update check (only when asked)
 
     private static readonly System.Net.Http.HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(8) };
@@ -345,6 +394,7 @@ public partial class SettingsWindow : Window
     {
         RumbleText.Text = $"{(int)RumbleSlider.Value}%";
         SpringText.Text = $"{(int)SpringSlider.Value}%";
+        FrictionText.Text = $"{(int)FrictionSlider.Value}%";
     }
 
     private void Ffb_Changed(object sender, RoutedEventArgs e) => PushForce();
@@ -366,6 +416,7 @@ public partial class SettingsWindow : Window
             Enabled = FfbBox.IsChecked == true,
             RumblePercent = (int)RumbleSlider.Value,
             SpringPercent = (int)SpringSlider.Value,
+            FrictionPercent = (int)FrictionSlider.Value,
             Style = StyleBox.SelectedIndex switch { 1 => ForceMath.StyleSharp, 2 => ForceMath.StyleRough, _ => ForceMath.StyleSmooth },
             Motors = MotorsBox.SelectedIndex switch { 1 => ForceMath.MotorsHeavy, 2 => ForceMath.MotorsLight, _ => ForceMath.MotorsBoth },
         };
