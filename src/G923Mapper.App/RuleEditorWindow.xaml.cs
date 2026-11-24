@@ -643,11 +643,17 @@ public partial class RuleEditorWindow : Window
             MessageBox.Show(this, $"A profile can have at most {ProfileModes.MaxModes} modes.", "Add mode", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
-        string? wanted = Prompt.Ask(this, "Add mode", "Name for the new mode, for example Shooting, Driving or Flying.", _modes.Count == 0 ? "Shooting" : "Driving")?.Trim();
-        if (string.IsNullOrEmpty(wanted)) return;
-        wanted = wanted.Replace(":", "");
-        string name = FreeModeName(wanted, null);
-        _modes.Add(new EditorMode { Name = name });
+        var dlg = new AddModeWindow(n => ProfileModes.IsReservedName(n) || _modes.Any(m => string.Equals(m.Name, n, StringComparison.OrdinalIgnoreCase)),
+            _rows.Select(r => r.Rule).ToList(), _modes.Count == 0) { Owner = this };
+        if (dlg.ShowDialog() != true) return;
+        string name = FreeModeName(dlg.ModeName, null);
+
+        // A ready-made mode (Driving, Shooting, Flying) starts with its usual rules, worked out against the profile's own as they are now.
+        var probe = new Profile { Name = "x", Rules = _rows.Select(r => r.Rule).ToList() };
+        ProfileMode made = ModePresets.AddTo(probe, name, dlg.PresetId);
+        var mode = new EditorMode { Name = name, Removed = (made.RemovedRules ?? []).ToList() };
+        foreach (Rule r in made.Rules) mode.Rows.Add(new RuleRow(r));
+        _modes.Add(mode);
         ToBox.ItemsSource = ToChoices(SecondPadBox.IsChecked == true, ModeNames);
         SelectView(_modes.Count - 1);
     }

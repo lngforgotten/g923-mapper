@@ -470,3 +470,111 @@ public class ModeSwitchButtonTests
         Assert.Equal("Next", engine.TakeModeRequest());
     }
 }
+
+public class ModePresetTests
+{
+    private static readonly DeviceRegistry Devices = DeviceRegistry.CreateDefault();
+    private static DeviceMap Wheel() { Devices.TryGet("g923_xbox", out var d); return d; }
+    private static Profile Parse(string json) { var r = ProfileLoader.Parse(json, Devices); Assert.True(r.Ok, string.Join("; ", r.Errors)); return r.Profile!; }
+
+    private static InputFrame Frame(params (string Name, double Value)[] values)
+    {
+        var f = new InputFrame();
+        foreach (var (n, v) in values) f.Values[n] = v;
+        return f;
+    }
+
+    [Fact]
+    public void A_driving_mode_comes_ready_made_with_the_usual_pedals_paddles_and_steering()
+    {
+        Profile p = Parse("""{ "name": "t", "rules": [] }""");
+        ProfileMode m = ModePresets.AddTo(p, "Driving", ModePresets.Driving);
+        var map = m.Rules.ToDictionary(r => r.To, r => r.From);
+        Assert.Equal("throttle", map["RightTrigger"]);
+        Assert.Equal("brake", map["LeftTrigger"]);
+        Assert.Equal("paddleL", map["Button:LeftShoulder"]);
+        Assert.Equal("paddleR", map["Button:RightShoulder"]);
+        Assert.Equal("wheel", map["LeftStickX"]);   // the profile did not steer, so the mode does
+        Assert.True(ProfileLoader.Parse(ProfileWriter.ToJson(p), Devices).Ok);
+    }
+
+    [Fact]
+    public void A_driving_mode_does_not_add_steering_when_the_profile_already_steers()
+    {
+        Profile p = Parse("""{ "name": "t", "rules": [ { "from": "wheel", "to": "LeftStickX", "deadzone": 0.1 } ] }""");
+        ProfileMode m = ModePresets.AddTo(p, "Driving", ModePresets.Driving);
+        Assert.DoesNotContain(m.Rules, r => r.To == "LeftStickX");
+        Assert.Equal(0.1, ProfileModes.Resolve(p, 0).Rules.Single(r => r.To == "LeftStickX").Deadzone);   // the profile's own steering still rules
+    }
+
+    [Fact]
+    public void Adding_driving_to_the_wardogs_style_profile_turns_off_the_pedal_keys_in_that_mode_only()
+    {
+        Profile p = Parse("""
+            { "name": "Wardogs", "safety": "standard", "outputs": { "keyboard": true },
+              "rules": [ { "from": "wheel", "to": "LeftStickX" }, { "from": "clutch", "to": "Key:Q", "threshold": 0.35 }, { "from": "throttle", "to": "Key:E" }, { "from": "brake", "to": "Key:C" } ] }
+            """);
+        ModePresets.AddTo(p, "Driving", ModePresets.Driving);
+        Assert.Equal(["Key:E", "Key:C"], p.Modes[0].RemovedRules);   // throttle and brake are busy driving (the clutch is not used by driving)
+        Profile driving = ProfileModes.Resolve(p, 0);
+        var engine = new MappingEngine(driving, Wheel(), Devices);
+        var state = engine.Evaluate(Frame(("throttle", 1), ("brake", 1), ("clutch", 1)), 0);
+        Assert.Contains("Q", state.Keys);      // the clutch still leans, which driving leaves alone
+        Assert.DoesNotContain("E", state.Keys);
+        Assert.DoesNotContain("C", state.Keys);
+        Assert.True(state.RightTrigger > 200);
+        Assert.True(state.LeftTrigger > 200);
+    }
+
+    [Fact]
+    public void A_shooting_mode_turns_off_the_profiles_pedal_triggers_in_that_mode()
+    {
+        Profile p = Parse("""{ "name": "t", "rules": [ { "from": "throttle", "to": "RightTrigger" }, { "from": "brake", "to": "LeftTrigger" } ] }""");
+        ModePresets.AddTo(p, "Shooting", ModePresets.Shooting);
+        Assert.Equal(["RightTrigger", "LeftTrigger"], p.Modes[0].RemovedRules);
+        Assert.DoesNotContain(ProfileModes.Resolve(p, 0).Rules, r => r.To == "RightTrigger");
+    }
+
+    [Fact]
+    public void Rules_that_switch_modes_are_never_turned_off_by_a_preset()
+    {
+        Profile p = Parse("""{ "name": "t", "rules": [ { "from": "clutch", "to": "Mode:Next" } ], "modes": [ { "name": "A", "rules": [] } ] }""");
+        ModePresets.AddTo(p, "Shooting", ModePresets.Shooting);   // uses the clutch for Q
+        Assert.Null(p.Modes[1].RemovedRules);
+        Assert.Contains(ProfileModes.Resolve(p, 1).Rules, r => r.To == "Mode:Next");
+    }
+
+    [Fact]
+    public void The_flying_mode_pitches_both_ways_and_a_blank_mode_has_nothing()
+    {
+        Profile p = Parse("""{ "name": "t", "rules": [ { "from": "wheel", "to": "LeftStickX" } ] }""");
+        ModePresets.AddTo(p, "Flying", ModePresets.Flying);
+        ModePresets.AddTo(p, "Empty", ModePresets.Blank);
+        var engine = new MappingEngine(ProfileModes.Resolve(p, 0), Wheel(), Devices);
+        Assert.True(engine.Evaluate(Frame(("throttle", 1)), 0).RightY > 20000);
+        Assert.True(engine.Evaluate(Frame(("brake", 1)), 10).RightY < -20000);
+        Assert.Empty(p.Modes[1].Rules);
+        Assert.Null(p.Modes[1].RemovedRules);
+    }
+
+    [Fact]
+    public void Naming_a_mode_after_a_preset_finds_that_preset_and_other_names_do_not()
+    {
+        Assert.Equal(ModePresets.Driving, ModePresets.ForName("driving")?.Id);
+        Assert.Equal(ModePresets.Shooting, ModePresets.ForName(" Shooting ")?.Id);
+        Assert.Null(ModePresets.ForName("Hacking"));
+        Assert.Null(ModePresets.ForName("Blank mode"));
+    }
+
+    [Fact]
+    public void Only_the_shooting_preset_uses_keys_and_every_preset_loads_cleanly()
+    {
+        Assert.Equal([ModePresets.Shooting], ModePresets.All.Where(p => p.UsesKeys).Select(p => p.Id));
+        foreach (var preset in ModePresets.All)
+        {
+            Profile p = Parse("""{ "name": "t", "rules": [] }""");
+            ModePresets.AddTo(p, preset.Name, preset.Id);
+            Assert.True(ProfileLoader.Parse(ProfileWriter.ToJson(p), Devices).Ok, preset.Id);
+        }
+    }
+}
