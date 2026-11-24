@@ -152,7 +152,38 @@ public partial class RuleEditorWindow : Window
         if (_rows.Count > 0) RuleList.SelectedIndex = 0; else LoadRule(null);
         RefreshViewBox(-1);
         Revalidate();
+        _openedAs = ProfileWriter.ToJson(BuildProfile());   // what "nothing changed" looks like, to tell if there is anything to lose
     }
+
+    private string _openedAs = "";
+
+    /// <summary>
+    /// Closing the window any way at all (Cancel, the X, Escape) with changes that have not been saved asks first, so a slip of the mouse or a
+    /// closing app cannot throw an edit away without being asked: Save, Do not save, or keep editing.
+    /// </summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (e.Cancel || Saved || _closingConfirmed || _openedAs.Length == 0) return;
+        if (ProfileWriter.ToJson(BuildProfile()) == _openedAs) return;
+
+        var answer = MessageBox.Show(this,
+            "You have changes to this profile that are not saved.\n\nYes: save them and close.\nNo: close without saving.\nCancel: keep editing.",
+            "Unsaved changes", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel);
+        if (answer == MessageBoxResult.Cancel) { e.Cancel = true; return; }
+        if (answer == MessageBoxResult.No) { _closingConfirmed = true; return; }
+
+        // Yes: save, and only close if the save went through (a profile with problems cannot be saved, so stay and show them).
+        e.Cancel = true;
+        Dispatcher.BeginInvoke(() =>
+        {
+            Revalidate();
+            if (!_valid) { MessageBox.Show(this, "This profile has problems that have to be fixed before it can be saved. They are listed at the bottom of the window.", "Unsaved changes", MessageBoxButton.OK, MessageBoxImage.Information); return; }
+            Save_Click(this, new RoutedEventArgs());
+        });
+    }
+
+    private bool _closingConfirmed;
 
     private bool _syncing;
 

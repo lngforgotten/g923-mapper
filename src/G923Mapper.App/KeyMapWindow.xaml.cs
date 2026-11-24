@@ -47,9 +47,24 @@ public partial class KeyMapWindow : Window
             KeyBox.Text = KeyNames.MouseButtonNames.FirstOrDefault(m => m.Equals(existing.To, StringComparison.OrdinalIgnoreCase)) ?? KeyMappings.Label(existing.To);
         }
         ShowSafety();
+        _openedFrom = FromBox.Text;
+        _openedKey = KeyBox.Text;
 
         _timer.Tick += (_, _) => Tick();
         Closed += (_, _) => _timer.Stop();
+    }
+
+    private readonly string _openedFrom, _openedKey;
+    private bool _closingConfirmed;
+
+    /// <summary>Closing with a wheel control or key chosen but not saved asks first.</summary>
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        base.OnClosing(e);
+        if (e.Cancel || Changed || _closingConfirmed || (FromBox.Text == _openedFrom && KeyBox.Text == _openedKey)) return;
+        var answer = MessageBox.Show(this, "You have chosen something that is not saved. Close without saving it?", "Unsaved changes",
+            MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
+        if (answer == MessageBoxResult.Yes) _closingConfirmed = true; else e.Cancel = true;
     }
 
     private void ShowSafety()
