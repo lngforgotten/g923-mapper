@@ -1,4 +1,4 @@
-<Window x:Class="G923Mapper.App.RuleEditorWindow"
+﻿<Window x:Class="G923Mapper.App.RuleEditorWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:G923Mapper.App"
@@ -90,6 +90,8 @@
                               ToolTip="With HidHide installed, a profile can hide the real wheel from games while its game is running, and give it back afterwards. It never happens just because the profile is selected. Each change asks for administrator permission." />
                     <CheckBox x:Name="LeaveWheelBox" Content="Leave the wheel alone" Margin="16,0,0,0" VerticalAlignment="Center" Checked="Profile_Changed" Unchecked="Profile_Changed"
                               ToolTip="For a game with its own wheel support (force feedback included). While this profile is in use the mapper lets go of the wheel and creates no virtual controller, so the game has the wheel to itself. The profile's rules do nothing." />
+                    <CheckBox x:Name="KeepKeysBox" Content="but still send keys and mouse" Margin="12,0,0,0" VerticalAlignment="Center" Checked="Profile_Changed" Unchecked="Profile_Changed"
+                              ToolTip="Still read the wheel, without taking it over, and send the keyboard and mouse rules (for example a gear shifter that presses keys) while the game keeps the wheel and its force feedback. There is no virtual controller, so rules that send to it do nothing. Keyboard output needs Standard safety." />
                     <TextBlock x:Name="HideWheelHint" Style="{StaticResource Hint}" Margin="14,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
                 <WrapPanel x:Name="ModeRow" Grid.Row="7" Grid.ColumnSpan="6" Margin="0,10,0,0">
@@ -316,3 +318,4 @@
         </DockPanel>
     </Grid>
 </Window>
+

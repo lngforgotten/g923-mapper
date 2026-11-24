@@ -10,8 +10,8 @@ public sealed class WheelForce : IDisposable
 {
     private readonly IDirectInputDevice8 _dev;
     private readonly int[] _axis;
-    private IDirectInputEffect? _spring, _heavy, _light, _friction, _curve;
-    private int _springPct = -1, _heavyMag = -1, _lightMag = -1, _frictionPct = -1, _curveMag;
+    private IDirectInputEffect? _spring, _heavy, _light, _friction, _curve, _damper;
+    private int _springPct = -1, _heavyMag = -1, _lightMag = -1, _frictionPct = -1, _curveMag, _damperPct = -1;
     private long _curveSentMs = long.MinValue / 2, _curveStartedMs = long.MinValue / 2;
 
     /// <summary>Which kind of effect gives the steady resistance: "friction", a "damper" if the wheel has no friction effect, or "none" if it has neither.</summary>
@@ -46,6 +46,7 @@ public sealed class WheelForce : IDisposable
             });
             f.MakeFriction();
             f.MakeCurve();
+            f.MakeDamper();
             f._heavy = f.Make(shape, new PeriodicForce { Magnitude = 0, Offset = 0, Phase = 0, Period = ForceMath.HeavyPeriodMicroseconds });
             f._light = f.Make(shape, new PeriodicForce { Magnitude = 0, Offset = 0, Phase = 0, Period = ForceMath.LightPeriodMicroseconds });
         }
@@ -78,6 +79,27 @@ public sealed class WheelForce : IDisposable
     {
         try { _curve = Make(EffectGuid.ConstantForce, new ConstantForce { Magnitude = 0 }, CurveLifetimeMicroseconds); }
         catch (SharpGen.Runtime.SharpGenException ex) { AppLog.Warn($"The wheel has no constant-force effect ({ex.ResultCode}), so the centring curve is unavailable; the plain spring still works."); }
+    }
+
+    /// <summary>
+    /// The curve's damping is the wheel's own damper effect, which the wheel applies at its own rate. (Working it out in software from the wheel's
+    /// position is noisy and a little late, which is the wrong thing to feed back into a force.) Not every wheel has one; the curve then has none.
+    /// </summary>
+    private void MakeDamper()
+    {
+        try { _damper = Make(EffectGuid.Damper, Resistance(0)); }
+        catch (SharpGen.Runtime.SharpGenException ex) { AppLog.Info($"The wheel has no damper effect ({ex.ResultCode}), so the curve's damping does nothing."); }
+    }
+
+    /// <summary>Apply the curve's damping strength. Cheap to call every frame; only changes when the value does.</summary>
+    public void SetDamper(int percent)
+    {
+        if (_damper is null || percent == _damperPct) return;
+        _damperPct = percent;
+        int k = ForceMath.DamperCoefficient(percent);
+        if (k == 0) { _damper.Stop(); return; }
+        _damper.SetParameters(new EffectParameters { Parameters = Resistance(k) }, EffectParameterFlags.TypeSpecificParameters);
+        Begin(_damper, "curve damping");
     }
 
     /// <summary>The curve effect only lives this long and is renewed while the app is alive, so a frozen app cannot leave the wheel pulling.</summary>
@@ -214,6 +236,7 @@ public sealed class WheelForce : IDisposable
         Check(_spring, "spring", _springPct > 0);
         Check(_friction, FrictionKind, _frictionPct > 0);
         Check(_curve, "centring curve", _curveMag != 0);
+        Check(_damper, "curve damping", _damperPct > 0);
         Check(_heavy, "heavy rumble", _heavyMag > 0);
         Check(_light, "light rumble", _lightMag > 0);
         if (restored.Count == 0 && refused.Count == 0) return null;
@@ -231,6 +254,7 @@ public sealed class WheelForce : IDisposable
     {
         _springPct = -1;
         _frictionPct = -1;
+        _damperPct = -1;
     }
 
     /// <summary>What the wheel says about each effect and its actuators. For diagnosing "it stopped" reports.</summary>
@@ -243,27 +267,28 @@ public sealed class WheelForce : IDisposable
         }
         string device;
         try { device = _dev.GetForceFeedbackState().ToString(); } catch (SharpGen.Runtime.SharpGenException ex) { device = "err:" + ex.ResultCode.ToString(); }
-        return $"heavy={State(_heavy)}({_heavyMag}) light={State(_light)}({_lightMag}) spring={State(_spring)}({_springPct}%) curve={State(_curve)}({_curveMag}) {FrictionKind}={State(_friction)}({_frictionPct}%) device=[{device}]";
+        return $"heavy={State(_heavy)}({_heavyMag}) light={State(_light)}({_lightMag}) spring={State(_spring)}({_springPct}%) curve={State(_curve)}({_curveMag}) damper={State(_damper)}({_damperPct}%) {FrictionKind}={State(_friction)}({_frictionPct}%) device=[{device}]";
     }
 
     /// <summary>Silence everything, for example when the game stops rumbling or the mapper stops.</summary>
     public void Silence()
     {
-        try { _heavy?.Stop(); _light?.Stop(); _spring?.Stop(); _friction?.Stop(); _curve?.Stop(); } catch (SharpGen.Runtime.SharpGenException) { }
+        try { _heavy?.Stop(); _light?.Stop(); _spring?.Stop(); _friction?.Stop(); _curve?.Stop(); _damper?.Stop(); } catch (SharpGen.Runtime.SharpGenException) { }
         _heavyMag = _lightMag = 0;
         _springPct = 0;
         _frictionPct = 0;
         _curveMag = 0;
+        _damperPct = 0;
     }
 
     public void Dispose()
     {
         Silence();
-        foreach (var e in new[] { _spring, _heavy, _light, _friction, _curve })
+        foreach (var e in new[] { _spring, _heavy, _light, _friction, _curve, _damper })
         {
             try { e?.Unload(); e?.Dispose(); } catch (SharpGen.Runtime.SharpGenException) { }
         }
-        _spring = _heavy = _light = _friction = _curve = null;
+        _spring = _heavy = _light = _friction = _curve = _damper = null;
     }
 }
 

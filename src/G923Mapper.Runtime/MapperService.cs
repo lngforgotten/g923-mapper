@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using Vortice.DirectInput;
 
 namespace G923Mapper;
@@ -192,6 +192,39 @@ public sealed class MapperService : IDisposable
     private long _lastResend;
     private long _diagAt;
 
+    private int _traceRequested;
+    private volatile TraceRecorder? _trace;
+    private TraceRecorder? _probeTrace;
+
+    /// <summary>
+    /// Record what the wheel does for a few seconds: its position and the force being sent, written as a CSV in the log folder, with a sentence
+    /// saying whether the wheel settled or kept swinging. The result arrives through <see cref="TraceFinished"/>.
+    /// </summary>
+    public void RecordTrace(int seconds = 10) => Interlocked.Exchange(ref _traceRequested, Math.Clamp(seconds, 2, 30));
+
+    /// <summary>Raised on the service thread when a recording started with <see cref="RecordTrace"/> is done.</summary>
+    public event Action<TraceResult>? TraceFinished;
+
+    /// <summary>True while a recording is running.</summary>
+    public bool Recording => _trace is not null;
+
+    /// <summary>Write a recording to the log folder and say what it shows. Never throws: a folder that cannot be written to just means no file.</summary>
+    private TraceResult SaveTrace(TraceRecorder? recording, string prefix)
+    {
+        if (recording is null) return new TraceResult(false, "", null, "Nothing was recorded.");
+        TraceSummary summary = recording.Summarise();
+        string path = "";
+        try
+        {
+            string dir = AppLog.Directory ?? Path.GetTempPath();
+            path = Path.Combine(dir, $"{prefix}-{DateTime.Now:yyyyMMdd-HHmmss}.csv");
+            File.WriteAllText(path, recording.ToCsv());
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { path = ""; }
+        Emit($"Recording ({summary.Count} samples over {summary.Seconds:0.0} s): {summary.Verdict}" + (path.Length > 0 ? " Saved to " + path : ""));
+        return new TraceResult(true, path, summary, summary.Verdict);
+    }
+
     private int _probeRequested;
     private volatile FrictionProbe? _probe;
     private long _probeStartMs;
@@ -360,7 +393,8 @@ public sealed class MapperService : IDisposable
             return;
         }
 
-        if (profile.LeaveWheel) { StandAside(profile, ct); return; }
+        if (profile.LeaveWheel && !profile.KeepKeys) { StandAside(profile, ct); return; }
+        bool keysOnly = profile.LeaveWheel && profile.KeepKeys;   // read the wheel for the keyboard rules only; the game keeps the wheel
 
         using IDirectInput8 di = DInput.DirectInput8Create();
         DeviceInstance? instance = DirectInputWheel.Find(di, _devices, DeviceRegistry.IsAuto(profile.Device) ? null : device, WheelIndex);
@@ -372,14 +406,16 @@ public sealed class MapperService : IDisposable
             return;
         }
 
-        using DirectInputWheel wheel = DirectInputWheel.Open(di, instance, _window(), _force.Enabled, _force.Style);
+        // Keys only: no force feedback, so the wheel is opened read-only and non-exclusive and the game can take it exclusively as it likes.
+        using DirectInputWheel wheel = DirectInputWheel.Open(di, instance, _window(), _force.Enabled && !keysOnly, _force.Style);
         WheelName = instance.ProductName;
         ForceSupported = wheel.ForceSupported;
         ForceActive = wheel.Force is not null;
         CurveSupported = wheel.Force?.HasCurve == true;
         _probe = null; _haveAngle = false;
         ForceMessage = wheel.ForceMessage;
-        Emit(ForceActive ? "Force feedback is active."
+        Emit(keysOnly ? "Keys only: the wheel is read without taking it over, and force feedback is left to the game."
+            : ForceActive ? "Force feedback is active."
             : _force.Enabled ? "Force feedback is not active: " + (ForceMessage.Length > 0 ? ForceMessage : "unknown reason") : "Force feedback is off.");
         WheelIds = $"VID_{wheel.Vid:X4} PID_{wheel.Pid:X4}";
         WheelUsbIds = (wheel.Vid, wheel.Pid);
@@ -393,7 +429,7 @@ public sealed class MapperService : IDisposable
 
         IVirtualPad pad;
         PadKind padKind = PadKinds.Of(profile);
-        try { pad = _padFactory(padKind); pad.Connect(); }
+        try { pad = keysOnly ? new NullPad() : _padFactory(padKind); pad.Connect(); }
         catch (Exception ex)
         {
             Set(MapperState.Error, $"Could not create the virtual pad ({ex.Message}). Is ViGEmBus installed?");
@@ -403,7 +439,7 @@ public sealed class MapperService : IDisposable
 
         // An optional second virtual controller, for profiles that send some rules to "P2:" targets.
         IVirtualPad? pad2 = null;
-        if (profile.Outputs.SecondPad)
+        if (profile.Outputs.SecondPad && !keysOnly)
         {
             try { pad2 = _padFactory(padKind); pad2.Connect(); }
             catch (Exception ex) { Emit($"Could not create the second virtual controller ({ex.Message})."); pad2 = null; }
@@ -414,7 +450,7 @@ public sealed class MapperService : IDisposable
         {
             Emit($"Wheel connected: {WheelName} ({WheelIds}).");
             if (pad2 is not null) Emit("A second virtual controller is connected.");
-            if (padKind == PadKind.DualShock4) Emit("The game sees a DualShock 4.");
+            if (padKind == PadKind.DualShock4 && !keysOnly) Emit("The game sees a DualShock 4.");
             if (_centreOverride is int co && device.Axes.TryGetValue("wheel", out var wa0)) wa0.Centre = co;
 
             // Where the wheel settles: the centre follows it, a few degrees at most from the calibrated one.
@@ -445,7 +481,7 @@ public sealed class MapperService : IDisposable
             bool gateOpen = true;
             string? heldNotice = null;
             HashSet<string>? runningNames = null;
-            Set(MapperState.Running, $"Running \"{profile.Name}\"");
+            Set(MapperState.Running, $"Running \"{profile.Name}\"{(keysOnly ? " (keys only)" : "")}");
 
             while (!ct.IsCancellationRequested && !wheel.Lost)
             {
@@ -457,13 +493,18 @@ public sealed class MapperService : IDisposable
                     if (_store.Get(_profileName) is Profile fresh && _devices.Resolve(fresh.Device, WheelUsbIds) is DeviceMap freshDevice)
                     {
                         // A profile that leaves the wheel alone: let go of the wheel and the pad, then the session starts again and stands aside.
-                        if (fresh.LeaveWheel)
+                        if (fresh.LeaveWheel && !fresh.KeepKeys)
                         {
                             Emit($"\"{fresh.Name}\" leaves the wheel alone: letting go of the wheel.");
                             break;
                         }
+                        if ((fresh.LeaveWheel && fresh.KeepKeys) != keysOnly)
+                        {
+                            Emit(keysOnly ? $"\"{fresh.Name}\" takes the wheel: reconnecting." : $"\"{fresh.Name}\" only sends keys: letting go of the wheel and the virtual controller.");
+                            break;
+                        }
                         // A different controller type needs a new virtual pad: reconnect (the game sees it replugged).
-                        if (PadKinds.Of(fresh) != padKind || fresh.Outputs.SecondPad != (pad2 is not null))
+                        if (!keysOnly && (PadKinds.Of(fresh) != padKind || fresh.Outputs.SecondPad != (pad2 is not null)))
                         {
                             Emit($"Switching the virtual controller to {(PadKinds.Of(fresh) == PadKind.DualShock4 ? "a DualShock 4" : "an Xbox 360 controller")}.");
                             break;
@@ -483,7 +524,7 @@ public sealed class MapperService : IDisposable
                         PublishModes(profile, mode);
                         if (mode >= 0) Emit($"Mode: {ProfileModes.NameAt(profile, mode)}.");
                         heldNotice = null;
-                        Set(MapperState.Running, $"Running \"{profile.Name}\"");
+                        Set(MapperState.Running, $"Running \"{profile.Name}\"{(keysOnly ? " (keys only)" : "")}");
                         Emit($"Now running \"{profile.Name}\" ({profile.Rules.Count} rules).");
                     }
                     else
@@ -698,7 +739,8 @@ public sealed class MapperService : IDisposable
                 FloorMeasured?.Invoke(new FloorMeasurement(false, 0, false, WheelIds, !f.HasCurve ? "This wheel does not accept the kind of force the curve needs." : "The wheel is not reporting, so it cannot be measured. Move it a little and try again."));
             else
             {
-                _probe = new FrictionProbe(angle);
+                _probe = new FrictionProbe();
+                _probeTrace = new TraceRecorder(60_000, minGapMs: 2);
                 _probeStartMs = nowMs;
                 Emit("Measuring the wheel for the centring curve: keep your hands off it.");
             }
@@ -706,17 +748,21 @@ public sealed class MapperService : IDisposable
         if (_probe is { } probe)
         {
             double push = probe.Step(rawDegrees, nowMs, haveAngle);   // raw position: the auto-centre must not look like the wheel moving
-            f.SetSpring(0); f.SetFriction(0); f.SetRumble(0, 0, 0);
+            f.SetSpring(0); f.SetFriction(0); f.SetDamper(0); f.SetRumble(0, 0, 0);
             f.SetCurveForce(CentringCurve.ToDevice(push, false), nowMs);
+            _probeTrace?.Add(nowMs, angle, rawDegrees, CentringCurve.ToDevice(push, false), curveOn: false);
             if (probe.Done)
             {
                 f.SetCurveForce(0, nowMs);
                 _probe = null;
+                string detail = probe.Detail;
                 FloorMeasurement result = probe.Floor is double least
                     ? new(true, (int)Math.Round(least * 100), probe.Reversed, WheelIds,
-                          $"The wheel starts to move at {least * 100:0}% force{(probe.Reversed ? "; it pushes the other way round, which is now allowed for" : "")}.")
-                    : new(false, 0, false, WheelIds, probe.Problem);
+                          $"The wheel starts to move at {least * 100:0}% force{(probe.Reversed ? "; it pushes the other way round, which is now allowed for" : "")}. {detail}")
+                    : new(false, 0, false, WheelIds, (probe.Problem + " " + detail).Trim());
                 Emit("Centring measurement: " + result.Message);
+                SaveTrace(_probeTrace, "measure");
+                _probeTrace = null;
                 FloorMeasured?.Invoke(result);
             }
             return;
@@ -724,23 +770,32 @@ public sealed class MapperService : IDisposable
 
         // The centring: the app's own curve when it is chosen and this wheel has been measured, otherwise the wheel's plain spring.
         bool useCurve = CentringCurve.NormaliseStyle(s.CentringStyle) == CentringCurve.StyleCurve && f.HasCurve && haveAngle && s.CentringWheel == WheelIds;
+        int sentForce = 0;
         if (useCurve)
         {
-            if (_haveAngle && nowMs - _lastAngleMs >= 4)
-            {
-                double instant = (angle - _lastAngle) * 1000.0 / (nowMs - _lastAngleMs);
-                _velocity = _velocity * 0.7 + instant * 0.3;
-                _lastAngle = angle; _lastAngleMs = nowMs;
-            }
-            else if (!_haveAngle) { _haveAngle = true; _lastAngle = angle; _lastAngleMs = nowMs; _velocity = 0; }
             f.SetSpring(0);
-            f.SetCurveForce(CentringCurve.ToDevice(CentringCurve.Force(angle, _velocity, s, half), s.CentringReversed), nowMs);
+            f.SetDamper(s.DampingPercent);   // the wheel's own damper does the damping, at its own rate
+            sentForce = CentringCurve.ToDevice(CentringCurve.Force(angle, 0, s, half), s.CentringReversed);
+            f.SetCurveForce(sentForce, nowMs);
         }
         else
         {
-            _haveAngle = false;
             f.SetCurveForce(0, nowMs);
+            f.SetDamper(0);
             f.SetSpring(s.SpringPercent);
+        }
+
+        // A recording asked for with RecordTrace: note where the wheel is and what is being sent, until the time is up.
+        if (Interlocked.Exchange(ref _traceRequested, 0) is int seconds and > 0 && _trace is null)
+        {
+            _trace = new TraceRecorder(seconds * 1000L, minGapMs: 2);
+            Emit($"Recording the wheel for {seconds} seconds.");
+        }
+        if (_trace is { } recording && haveAngle && !recording.Add(nowMs, angle, rawDegrees, sentForce, useCurve))
+        {
+            _trace = null;
+            TraceResult result = SaveTrace(recording, "trace");
+            TraceFinished?.Invoke(result);
         }
 
         // If something else (usually a game that has opened the real wheel) interrupted the effects, put them back, and say so now and then.
@@ -795,3 +850,5 @@ public sealed class MapperService : IDisposable
         }
     }
 }
+
+

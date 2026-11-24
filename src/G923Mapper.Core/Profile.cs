@@ -135,6 +135,11 @@ public sealed class Profile
     /// game with native wheel support, force feedback included, has the wheel to itself. The profile's rules do nothing while it is on.
     /// </summary>
     public bool LeaveWheel { get; set; }
+    /// <summary>
+    /// With <see cref="LeaveWheel"/>: still read the wheel, without taking it over, and send the keyboard and mouse rules (a gear shifter that presses keys,
+    /// say) while the game keeps the wheel and its force feedback. There is no virtual controller, so rules that send to it do nothing.
+    /// </summary>
+    public bool KeepKeys { get; set; }
     public List<Rule> Rules { get; set; } = new();
     /// <summary>Modes of this profile (see <see cref="ProfileMode"/>). Empty = the profile has just its own rules. A rule sending to "Mode:Next", "Mode:Previous" or "Mode:Name" switches between them.</summary>
     public List<ProfileMode> Modes { get; set; } = new();

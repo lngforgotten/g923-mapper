@@ -64,3 +64,21 @@ public sealed class PadState
         pad.Submit();
     }
 }
+
+/// <summary>
+/// A virtual controller that is not there: every call does nothing and nothing is ever sent to the system. Used when the mapper only reads the
+/// wheel to press keys and the game is to keep the wheel to itself, so no virtual controller must appear.
+/// </summary>
+public sealed class NullPad : IVirtualPad
+{
+    public void Connect() { }
+    public void SetLeftStick(short x, short y) { }
+    public void SetRightStick(short x, short y) { }
+    public void SetTriggers(byte left, byte right) { }
+    public void SetButton(PadButton button, bool pressed) { }
+    public void Submit() { }
+#pragma warning disable CS0067   // never raised: there is no game on the other end to rumble
+    public event Action<byte, byte>? Rumble;
+#pragma warning restore CS0067
+    public void Dispose() { }
+}

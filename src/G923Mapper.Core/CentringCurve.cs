@@ -1,4 +1,4 @@
-namespace G923Mapper;
+﻿namespace G923Mapper;
 
 /// <summary>A hand-tuned starting point for the centring curve, named after the kind of car it is meant to feel like.</summary>
 public sealed record CentringPreset(string Name, int Strength, int CentreDegrees, int PeakDegrees, int LighteningPercent, int DampingPercent)
@@ -36,11 +36,24 @@ public static class CentringCurve
     /// <summary>The strongest damping, as a share of the wheel's full force, at 100% damping and a fast turn.</summary>
     public const double DampingMax = 0.20;
 
+    /// <summary>Degrees either side of the middle where the curve pulls with no force at all (see <see cref="Force"/>).</summary>
+    public const double DeadDegrees = 1.0;
+
     /// <summary>A turn this fast (degrees a second) gives the full damping.</summary>
     public const double DampingSpeed = 300.0;
 
     /// <summary>The most force the floor measurement may use, as a share of the wheel's full force.</summary>
     public const double FloorMax = 0.30;
+
+    /// <summary>The curve's strength at 100% is this share of the wheel's full force (the strength slider scales it). Full force is far too much for a centring pull.</summary>
+    public const double CurveMax = 0.5;
+
+    /// <summary>
+    /// The steepest the pull may rise near the middle, as a share of the wheel's full force for each degree. The app sends the force a little behind
+    /// the wheel's movement (the loop, USB, the motor), and a pull that rises faster than this over a few degrees throws the wheel past the middle
+    /// every time, so it swings by itself. A strong curve therefore spreads its rise over a wider centre zone instead of a steeper one.
+    /// </summary>
+    public const double MaxPullPerDegree = 0.008;
 
     public static readonly IReadOnlyList<CentringPreset> Presets =
     [
@@ -56,15 +69,32 @@ public static class CentringCurve
     {
         double half = Math.Max(10, halfRangeDegrees);
         double a = Math.Min(Math.Abs(angleDegrees), half);
-        double centre = Math.Clamp(s.CentreDegrees, 1, 90);
-        double peak = Math.Clamp(s.PeakDegrees, centre + 1, Math.Max(centre + 1, half - 1));
+        double centre = EffectiveCentre(s);
         double keep = Math.Clamp(s.LighteningPercent, 0, 100) / 100.0;
+
+        // The rise from the end of the centre zone up to the peak, and the fall after it, are held to the same limit on the pull per degree as the
+        // centre zone is (1.5 is the steepest part of the smooth step used for both). A strong curve needs more room between the two.
+        double peakForce = Math.Clamp(s.SpringPercent, 0, 100) / 100.0 * CurveMax;
+        double upSpan = Math.Max(1, peakForce * 0.15 * 1.5 / MaxPullPerDegree);
+        double downSpan = Math.Max(1, peakForce * (1 - keep) * 1.5 / MaxPullPerDegree);
+        double peak = Math.Clamp(s.PeakDegrees, centre + upSpan, Math.Max(centre + upSpan, half - downSpan));
 
         const double atCentreEdge = 0.85;                                    // the ramp over the centre zone reaches this much of the peak
         if (a < centre) return atCentreEdge * (a / centre);
         if (a < peak) return atCentreEdge + (1 - atCentreEdge) * Smooth((a - centre) / (peak - centre));
         double span = Math.Max(1, half - peak);
         return 1 - (1 - keep) * Smooth((a - peak) / span);
+    }
+
+    /// <summary>
+    /// The centre zone actually used: the one set, or wider when the strength is high enough that the pull would otherwise rise faster than
+    /// <see cref="MaxPullPerDegree"/>.
+    /// </summary>
+    public static double EffectiveCentre(ForceSettings s)
+    {
+        double strength = Math.Clamp(s.SpringPercent, 0, 100) / 100.0;
+        double set = Math.Clamp(s.CentreDegrees, 1, 90);
+        return Math.Min(90, Math.Max(set, strength * CurveMax * 0.85 / MaxPullPerDegree));
     }
 
     private static double Smooth(double t) { t = Math.Clamp(t, 0, 1); return t * t * (3 - 2 * t); }
@@ -78,13 +108,18 @@ public static class CentringCurve
         double strength = Math.Clamp(s.SpringPercent, 0, 100) / 100.0;
         if (strength <= 0) return 0;
 
-        double centre = Math.Clamp(s.CentreDegrees, 1, 90);
-        double magnitude = strength * Shape(angleDegrees, s, halfRangeDegrees);
+        double damp = Math.Clamp(s.DampingPercent, 0, 100) / 100.0 * DampingMax * Math.Clamp(velocity / DampingSpeed, -1, 1);
+
+        // Right in the middle there is no pull at all. A force that flips sign across the middle makes any wheel chatter (it overshoots, gets
+        // pushed back, overshoots...), so the last degree either side is left alone. The damping, if any, still acts there.
+        if (Math.Abs(angleDegrees) < DeadDegrees) return Math.Clamp(-damp, -1, 1);
+
+        double centre = EffectiveCentre(s);
+        double magnitude = strength * CurveMax * Shape(angleDegrees, s, halfRangeDegrees);
         double floor = Math.Clamp(s.FloorPercent, 0, 100) / 100.0 * Math.Min(1, Math.Abs(angleDegrees) / centre);
         magnitude = Math.Max(magnitude, Math.Min(floor, FloorMax));
 
         double towardsCentre = -Math.Sign(angleDegrees) * magnitude;
-        double damp = Math.Clamp(s.DampingPercent, 0, 100) / 100.0 * DampingMax * Math.Clamp(velocity / DampingSpeed, -1, 1);
         return Math.Clamp(towardsCentre - damp, -1, 1);
     }
 
@@ -110,7 +145,10 @@ public static class CentringCurve
 
 /// <summary>
 /// Measures two things about a wheel with its hands off: the least force that gets it moving (the floor for the curve) and which way a
-/// positive force pushes it. The force is raised slowly from nothing until the wheel turns a couple of degrees, then dropped at once.
+/// positive force pushes it. The force is raised slowly from nothing, first one way and then the other, until the wheel has turned a couple of
+/// degrees each time. Pushing both ways is what makes the answer trustworthy: a spring that is already pulling the wheel (Logitech G HUB's
+/// own centring spring, say) helps one push as much as it hinders the other, so the two cancel; and if the wheel went the same way for both
+/// pushes, something else is moving it and the measurement says so instead of guessing.
 /// </summary>
 public sealed class FrictionProbe
 {
@@ -120,16 +158,22 @@ public sealed class FrictionProbe
     /// <summary>The wheel counts as moving after this many degrees.</summary>
     public const double MoveDegrees = 2.0;
 
-    /// <summary>Give up when the force reaches this (the wheel is probably being held) .</summary>
+    /// <summary>Give up when the force reaches this (the wheel is probably being held).</summary>
     public const double GiveUp = 0.35;
 
-    private readonly double _command;      // the sign of the force being sent: +1 or -1
-    private double _startAngle;
-    private long _startMs = -1;
+    /// <summary>How long the wheel is left alone between the two pushes to come to rest.</summary>
+    public const long SettleMs = 700;
 
-    public bool Done { get; private set; }
+    private enum Phase { Start, First, Settle, Second, Done }
 
-    /// <summary>The least force that turned the wheel, 0 to 1, when the measurement worked.</summary>
+    private Phase _phase = Phase.Start;
+    private double _reference;
+    private long _phaseStartMs;
+    private double _firstForce, _firstMove;
+
+    public bool Done => _phase == Phase.Done;
+
+    /// <summary>The least force that turned the wheel (the average of the two pushes), 0 to 1, when the measurement worked.</summary>
     public double? Floor { get; private set; }
 
     /// <summary>True when a positive force turned the wheel towards lower axis readings.</summary>
@@ -138,32 +182,81 @@ public sealed class FrictionProbe
     /// <summary>What went wrong, or empty.</summary>
     public string Problem { get; private set; } = "";
 
-    /// <summary>Which way the force pushes: away from the nearer end of the wheel's turn, so it always has room to move.</summary>
-    public FrictionProbe(double startAngleDegrees) => _command = startAngleDegrees > 0 ? -1 : 1;
+    /// <summary>The first push (towards higher readings): how far the wheel went, in degrees with its sign, and the force that did it. Zero until it has.</summary>
+    public double FirstMoveDegrees => _firstMove;
+    public double FirstForce => _firstForce;
+
+    /// <summary>The second push (towards lower readings): the same. Zero until it has moved.</summary>
+    public double SecondMoveDegrees { get; private set; }
+    public double SecondForce { get; private set; }
+
+    /// <summary>A sentence with what each push did, for the log and for the person measuring.</summary>
+    public string Detail => _firstMove == 0 ? "" :
+        $"Push 1 (towards higher readings): the wheel moved {_firstMove:+0.0;-0.0}° at {_firstForce * 100:0}% force." +
+        (SecondMoveDegrees == 0 ? "" : $" Push 2 (the other way): it moved {SecondMoveDegrees:+0.0;-0.0}° at {SecondForce * 100:0}% force.");
 
     /// <summary>
-    /// Feed it the wheel angle; get back the force to send now (a signed share of the full force, in the axis's own sense). Once <see cref="Done"/>
-    /// the force is zero.
+    /// Feed it the wheel position in degrees (any fixed reference will do); get back the force to send now, a signed share of the full force with
+    /// positive meaning towards higher axis readings. Once <see cref="Done"/> the force is zero.
     /// </summary>
-    public double Step(double angleDegrees, long nowMs, bool wheelLive = true)
+    public double Step(double positionDegrees, long nowMs, bool wheelLive = true)
     {
         if (Done) return 0;
         if (!wheelLive) { Fail("The wheel stopped reporting."); return 0; }
-        if (_startMs < 0) { _startMs = nowMs; _startAngle = angleDegrees; return 0; }
 
-        double seconds = (nowMs - _startMs) / 1000.0;
-        double force = Math.Min(GiveUp, RampPerSecond * seconds);
-        double moved = angleDegrees - _startAngle;
-        if (Math.Abs(moved) >= MoveDegrees)
+        switch (_phase)
         {
-            Done = true;
-            Floor = Math.Min(GiveUp, force);
-            Reversed = Math.Sign(moved) != Math.Sign(_command);
-            return 0;
+            case Phase.Start:
+                Begin(Phase.First, positionDegrees, nowMs);
+                return 0;
+
+            case Phase.First:
+            {
+                double force = Ramp(nowMs);
+                double moved = positionDegrees - _reference;
+                if (Math.Abs(moved) >= MoveDegrees) { _firstForce = force; _firstMove = moved; Begin(Phase.Settle, positionDegrees, nowMs); return 0; }
+                if (force >= GiveUp) { Fail(HeldMessage); return 0; }
+                return force;
+            }
+
+            case Phase.Settle:
+                if (nowMs - _phaseStartMs >= SettleMs) Begin(Phase.Second, positionDegrees, nowMs);
+                return 0;
+
+            default:   // the second push, the other way
+            {
+                double force = Ramp(nowMs);
+                double moved = positionDegrees - _reference;
+                if (Math.Abs(moved) >= MoveDegrees) { Finish(force, moved); return 0; }
+                if (force >= GiveUp) { Fail(HeldMessage); return 0; }
+                return -force;
+            }
         }
-        if (force >= GiveUp) { Fail("The wheel did not move even at " + (int)(GiveUp * 100) + "% force. Take your hands off it and try again."); return 0; }
-        return _command * force;
     }
 
-    private void Fail(string why) { Done = true; Problem = why; }
+    private static readonly string HeldMessage = "The wheel did not move even at " + (int)(GiveUp * 100) + "% force. Take your hands off it and try again.";
+
+    private void Begin(Phase phase, double position, long nowMs) { _phase = phase; _reference = position; _phaseStartMs = nowMs; }
+
+    private double Ramp(long nowMs) => Math.Min(GiveUp, RampPerSecond * (nowMs - _phaseStartMs) / 1000.0);
+
+    private void Finish(double secondForce, double secondMove)
+    {
+        SecondForce = secondForce; SecondMoveDegrees = secondMove;
+        // A force pushing up that moved the wheel up, and a force pushing down that moved it down: the right way round. The opposite for both:
+        // reversed. The same direction for both pushes means something else is pulling the wheel harder than the pushes were.
+        bool upThenDown = _firstMove > 0 && secondMove < 0, downThenUp = _firstMove < 0 && secondMove > 0;
+        if (!upThenDown && !downThenUp)
+        {
+            Fail("The wheel went the same way for both pushes, so something else is pulling it harder. Logitech G HUB's own centring spring is the usual cause: turn it off in G HUB (or take your hands off the wheel) and measure again.");
+            return;
+        }
+        Reversed = downThenUp;
+        Floor = Math.Min(GiveUp, (_firstForce + secondForce) / 2);
+        _phase = Phase.Done;
+    }
+
+    private void Fail(string why) { Problem = why; _phase = Phase.Done; }
 }
+
+

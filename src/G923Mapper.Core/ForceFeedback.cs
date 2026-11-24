@@ -109,6 +109,12 @@ public static class ForceMath
     /// <summary>Friction strength for a percentage.</summary>
     public static int FrictionCoefficient(int percent) => (int)Math.Round(Math.Clamp(percent, 0, 100) / 100.0 * FrictionMax);
 
+    /// <summary>The curve's damping at 100% on its slider, as a damper strength. Kept low: damping is felt on every turn of the wheel.</summary>
+    public const int DamperMax = 4000;
+
+    /// <summary>Damper strength for a percentage.</summary>
+    public static int DamperCoefficient(int percent) => (int)Math.Round(Math.Clamp(percent, 0, 100) / 100.0 * DamperMax);
+
     /// <summary>A rumble motor (0..255) scaled by the user's strength (0..100) to a periodic-effect magnitude.</summary>
     public static int RumbleMagnitude(byte motor, int percent)
     {

@@ -76,6 +76,7 @@ public partial class SettingsWindow : Window
         RefreshAll();
 
         _s.Service.FloorMeasured += OnFloorMeasured;
+        _s.Service.TraceFinished += OnTraceFinished;
         _statusTimer.Tick += (_, _) => RefreshLive();
         _statusTimer.Start();
         _saveTimer.Tick += (_, _) => { _saveTimer.Stop(); _s.Settings.Save(); };
@@ -83,6 +84,7 @@ public partial class SettingsWindow : Window
         {
             _statusTimer.Stop();
             _s.Service.FloorMeasured -= OnFloorMeasured;
+            _s.Service.TraceFinished -= OnTraceFinished;
             if (_saveTimer.IsEnabled) { _saveTimer.Stop(); _s.Settings.Save(); }
         };
     }
@@ -433,7 +435,7 @@ public partial class SettingsWindow : Window
         if (_loading) return;
         var f = new ForceSettings
         {
-            CentringReversed = _s.Settings.Force.CentringReversed,
+            CentringReversed = ReversedBox.IsChecked == true,
             CentringWheel = _s.Settings.Force.CentringWheel,
             CentringStyle = CentringStyleBox.SelectedIndex == 1 ? CentringCurve.StyleCurve : CentringCurve.StyleSpring,
             CentreDegrees = (int)CentreSlider.Value,
@@ -472,6 +474,7 @@ public partial class SettingsWindow : Window
         FloorSlider.Value = Math.Clamp(f.FloorPercent, 0, FloorSlider.Maximum);
         SpringSlider.Value = Math.Clamp(f.SpringPercent, 0, 100);
         CentringPresetBox.SelectedIndex = CentringCurve.Presets.ToList().FindIndex(p => p.Matches(f)) + 1;   // 0 = Custom
+        ReversedBox.IsChecked = f.CentringReversed;
         CurvePanel.Visibility = CentringStyleBox.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
         _loading = was;
     }
@@ -480,6 +483,12 @@ public partial class SettingsWindow : Window
     {
         if (_loading) return;
         CurvePanel.Visibility = CentringStyleBox.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+        PushForce();
+    }
+
+    private void Reversed_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
         PushForce();
     }
 
@@ -526,6 +535,25 @@ public partial class SettingsWindow : Window
         _saveTimer.Start();
     });
 
+    private void Trace_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_s.Service.ForceActive)
+        {
+            TraceStatus.Text = "Force feedback is not running, so there is nothing to record. Start the mapper first.";
+            return;
+        }
+        TraceButton.IsEnabled = false;
+        TraceStatus.Text = "Recording for 10 seconds: give the wheel a small nudge, then let go...";
+        _s.Service.RecordTrace(10);
+    }
+
+    /// <summary>A recording ended (on the service thread): show what it found and where the file is.</summary>
+    private void OnTraceFinished(TraceResult r) => Dispatcher.BeginInvoke(() =>
+    {
+        TraceButton.IsEnabled = true;
+        TraceStatus.Text = r.Message + (r.Path.Length > 0 ? "  Saved: " + System.IO.Path.GetFileName(r.Path) : "");
+    });
+
     private bool _showingResult;
 
     /// <summary>The live part of the curve section: the graph and what it says about this wheel.</summary>
@@ -545,6 +573,7 @@ public partial class SettingsWindow : Window
 
         if (svc.Measuring) { MeasureButton.IsEnabled = false; _showingResult = false; return; }
         MeasureButton.IsEnabled = svc.ForceActive && svc.CurveSupported;
+        if (!svc.Recording) TraceButton.IsEnabled = svc.ForceActive;
         if (_showingResult) return;
         bool measured = svc.WheelIds.Length > 0 && f.CentringWheel == svc.WheelIds;
         MeasureStatus.Text = svc.State != MapperState.Running ? "Start the mapper with the wheel plugged in to measure it."

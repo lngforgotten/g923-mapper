@@ -26,7 +26,7 @@ public class CentringCurveTests
     [Fact]
     public void The_shape_is_zero_in_the_middle_one_at_the_peak_and_the_lightening_share_at_full_lock()
     {
-        var s = Curve();
+        var s = Curve(5);
         Assert.Equal(0, CentringCurve.Shape(0, s, Half), 6);
         Assert.Equal(1, CentringCurve.Shape(60, s, Half), 6);
         Assert.Equal(0.4, CentringCurve.Shape(450, s, Half), 6);
@@ -36,7 +36,7 @@ public class CentringCurveTests
     [Fact]
     public void The_shape_is_the_same_on_both_sides_and_stays_between_zero_and_one()
     {
-        var s = Curve();
+        var s = Curve(5);
         for (double a = 0; a <= 450; a += 7.5)
         {
             double shape = CentringCurve.Shape(a, s, Half);
@@ -48,7 +48,7 @@ public class CentringCurveTests
     [Fact]
     public void The_shape_rises_to_the_peak_then_only_falls()
     {
-        var s = Curve();
+        var s = Curve(5);
         double last = -1;
         for (double a = 0; a <= 60; a += 2) { double v = CentringCurve.Shape(a, s, Half); Assert.True(v >= last - 1e-9, $"{a}"); last = v; }
         for (double a = 60; a <= 450; a += 5) { double v = CentringCurve.Shape(a, s, Half); Assert.True(v <= last + 1e-9, $"{a}"); last = v; }
@@ -66,7 +66,7 @@ public class CentringCurveTests
     [Fact]
     public void The_force_pulls_towards_the_middle_whichever_side_the_wheel_is_on()
     {
-        var s = Curve();
+        var s = Curve(5);
         Assert.True(CentringCurve.Force(40, 0, s, Half) < 0);        // turned towards higher readings: pulled back towards lower ones
         Assert.True(CentringCurve.Force(-40, 0, s, Half) > 0);
         Assert.Equal(0, CentringCurve.Force(0, 0, s, Half), 9);
@@ -76,8 +76,8 @@ public class CentringCurveTests
     [Fact]
     public void The_strength_scales_the_force_and_zero_turns_the_curve_off()
     {
-        Assert.Equal(-0.5, CentringCurve.Force(60, 0, Curve(50), Half), 6);
-        Assert.Equal(-0.25, CentringCurve.Force(60, 0, Curve(25), Half), 6);
+        Assert.Equal(-0.25, CentringCurve.Force(60, 0, Curve(50), Half), 6);     // 100% would be half of full force; 50% is a quarter
+        Assert.Equal(-0.125, CentringCurve.Force(60, 0, Curve(25), Half), 6);
         var off = Curve(0);
         off.FloorPercent = 20;
         off.DampingPercent = 100;
@@ -179,80 +179,217 @@ public class CentringCurveTests
 
 public class FrictionProbeTests
 {
-    /// <summary>A wheel that does not move until it is pushed by at least <paramref name="breakaway"/>, then moves <paramref name="direction"/>.</summary>
-    private static FrictionProbe Run(double startAngle, double breakaway, double direction, out double lastForce, bool stuck = false)
+    /// <summary>
+    /// A wheel to measure. It stays put until the net force on it reaches <paramref name="breakaway"/>, then slips half a degree a step the way
+    /// the net force points. The net force is the push (flipped if <paramref name="reversed"/>) plus a spring pulling towards <paramref name="springCentre"/>
+    /// (<paramref name="springPerDegree"/> of force for each degree away from it), the way Logitech G HUB's own spring does.
+    /// </summary>
+    private static FrictionProbe Measure(double breakaway, bool reversed = false, double springPerDegree = 0, double springCentre = 0, double constantPull = 0, double start = 0, bool held = false)
     {
-        var probe = new FrictionProbe(startAngle);
-        double angle = startAngle;
-        lastForce = 0;
-        for (long t = 0; t < 20_000 && !probe.Done; t += 5)
+        var probe = new FrictionProbe();
+        double position = start;
+        for (long t = 0; t < 60_000 && !probe.Done; t += 5)
         {
-            double force = probe.Step(angle, t);
-            lastForce = force;
-            if (!stuck && Math.Abs(force) >= breakaway) angle += direction * 0.5;   // it slips, a little each step
+            double push = probe.Step(position, t);
+            if (held) continue;
+            double net = (reversed ? -push : push) - springPerDegree * (position - springCentre) + constantPull;
+            if (Math.Abs(net) >= breakaway && push != 0) position += Math.Sign(net) * 0.5;
         }
         return probe;
     }
 
     [Fact]
-    public void It_finds_the_force_at_which_the_wheel_starts_to_move()
+    public void A_plain_wheel_gives_its_breakaway_force_and_is_the_right_way_round()
     {
-        var p = Run(0, 0.12, direction: 1, out _);
+        var p = Measure(0.12);
         Assert.True(p.Done);
-        Assert.InRange(p.Floor!.Value, 0.12, 0.12 + FrictionProbe.RampPerSecond * 0.05 + 0.02);
         Assert.Equal("", p.Problem);
+        Assert.False(p.Reversed);
+        Assert.InRange(p.Floor!.Value, 0.12, 0.12 + 0.02);
     }
 
     [Fact]
-    public void A_wheel_that_moves_the_way_it_is_pushed_is_not_reversed_and_the_opposite_is()
+    public void A_wheel_that_turns_the_opposite_way_to_the_force_is_found_to_be_reversed()
     {
-        // From the middle the force is sent towards higher readings (+1). A wheel that then moves up is the right way round.
-        Assert.False(Run(0, 0.1, direction: +1, out _).Reversed);
-        Assert.True(Run(0, 0.1, direction: -1, out _).Reversed);
-        // Starting turned to the right (positive) the force is sent the other way (-1), so a wheel moving down is the right way round.
-        Assert.False(Run(200, 0.1, direction: -1, out _).Reversed);
-        Assert.True(Run(200, 0.1, direction: +1, out _).Reversed);
+        var p = Measure(0.12, reversed: true);
+        Assert.Equal("", p.Problem);
+        Assert.True(p.Reversed);
+        Assert.InRange(p.Floor!.Value, 0.12, 0.14);
+    }
+
+    [Fact]
+    public void A_spring_already_pulling_the_wheel_does_not_fool_the_direction()
+    {
+        // The old one-way test read this as "reversed": the wheel rests 4 degrees off the spring's middle, so a small push the same way as the spring
+        // gets it moving. Pushing both ways and comparing cancels the spring.
+        foreach (bool reversed in new[] { false, true })
+        {
+            var p = Measure(breakaway: 0.10, reversed, springPerDegree: 0.012, springCentre: -4, start: 0);
+            Assert.Equal("", p.Problem);
+            Assert.Equal(reversed, p.Reversed);
+            Assert.InRange(p.Floor!.Value, 0.05, 0.16);
+        }
+    }
+
+    [Fact]
+    public void Something_pulling_the_wheel_harder_than_the_pushes_is_reported_not_guessed_at()
+    {
+        var p = Measure(breakaway: 0.05, constantPull: 0.30);       // moves the same way whichever way it is pushed
+        Assert.True(p.Done);
+        Assert.Null(p.Floor);
+        Assert.Contains("same way for both", p.Problem);
+        Assert.Contains("G HUB", p.Problem);
     }
 
     [Fact]
     public void The_force_starts_at_nothing_ramps_slowly_and_is_dropped_the_moment_the_wheel_moves()
     {
-        var p = new FrictionProbe(0);
+        var p = new FrictionProbe();
         Assert.Equal(0, p.Step(0, 0));
-        Assert.Equal(0.06 * 0.5, Math.Abs(p.Step(0, 500)), 6);
-        Assert.Equal(0.06 * 1.0, Math.Abs(p.Step(0, 1000)), 6);
+        Assert.Equal(0.06 * 0.5, p.Step(0, 500), 6);
+        Assert.Equal(0.06 * 1.0, p.Step(0, 1000), 6);
         Assert.Equal(0, p.Step(2.5, 1100));                       // it moved: the force is dropped at once
-        Assert.True(p.Done);
-        Assert.Equal(0, p.Step(2.5, 1200));                       // and stays off
+        Assert.False(p.Done);                                     // the second push still has to be made
+        Assert.Equal(0, p.Step(2.5, 1500));                       // and the wheel is left alone to settle first
+        Assert.Equal(0, p.Step(2.5, 1100 + FrictionProbe.SettleMs));
+        Assert.True(Math.Abs(p.Step(2.5, 1100 + FrictionProbe.SettleMs + 5)) < 0.001);   // the second ramp starts from nothing
+        double second = p.Step(2.5, 1100 + FrictionProbe.SettleMs + 500);
+        Assert.Equal(-0.06 * 0.5, second, 6);                     // and pushes the other way
     }
 
     [Fact]
     public void A_wheel_that_is_held_gives_up_at_the_limit_with_a_message_and_no_result()
     {
-        var p = Run(0, 1, direction: 1, out double last, stuck: true);
+        var p = Measure(0.12, held: true);
         Assert.True(p.Done);
         Assert.Null(p.Floor);
         Assert.Contains("hands", p.Problem);
-        Assert.Equal(0, last);
     }
 
     [Fact]
-    public void It_never_asks_for_more_than_the_limit()
+    public void It_never_asks_for_more_than_the_limit_in_either_direction()
     {
-        var p = new FrictionProbe(0);
+        var p = new FrictionProbe();
         double most = 0;
-        for (long t = 0; t < 30_000 && !p.Done; t += 10) most = Math.Max(most, Math.Abs(p.Step(0, t)));
+        for (long t = 0; t < 60_000 && !p.Done; t += 10) most = Math.Max(most, Math.Abs(p.Step(0, t)));
         Assert.True(most <= FrictionProbe.GiveUp + 1e-9);
     }
 
     [Fact]
     public void A_wheel_that_stops_reporting_ends_the_measurement_with_no_force()
     {
-        var p = new FrictionProbe(0);
+        var p = new FrictionProbe();
         p.Step(0, 0);
         Assert.Equal(0, p.Step(0, 300, wheelLive: false));
         Assert.True(p.Done);
         Assert.Null(p.Floor);
         Assert.NotEqual("", p.Problem);
+    }
+
+    [Fact]
+    public void The_measurement_does_not_depend_on_where_the_wheel_starts()
+    {
+        foreach (double start in new[] { -300.0, -3, 0, 7, 250 })
+        {
+            var p = Measure(0.10, start: start);
+            Assert.Equal("", p.Problem);
+            Assert.False(p.Reversed);
+        }
+    }
+}
+
+public class CurveStabilityTests
+{
+    [Fact]
+    public void There_is_no_pull_in_the_last_degree_either_side_of_the_middle()
+    {
+        var s = new ForceSettings { CentringStyle = CentringCurve.StyleCurve, SpringPercent = 60, CentreDegrees = 4, FloorPercent = 20, DampingPercent = 0 };
+        foreach (double a in new[] { 0, 0.3, -0.7, 0.99 })
+            Assert.Equal(0, CentringCurve.Force(a, 0, s, 450), 9);
+        Assert.NotEqual(0, CentringCurve.Force(1.5, 0, s, 450));
+        Assert.Equal(-CentringCurve.Force(1.5, 0, s, 450), CentringCurve.Force(-1.5, 0, s, 450), 9);
+    }
+
+    [Fact]
+    public void The_pull_just_outside_the_quiet_zone_is_gentle_so_there_is_no_jolt_at_its_edge()
+    {
+        var s = new ForceSettings { CentringStyle = CentringCurve.StyleCurve, SpringPercent = 30, CentreDegrees = 12, FloorPercent = 0, DampingPercent = 0 };
+        Assert.True(Math.Abs(CentringCurve.Force(1.0, 0, s, 450)) < 0.03);
+    }
+
+    [Theory]
+    [InlineData(0, 0)]
+    [InlineData(5, 200)]
+    [InlineData(100, ForceMath.DamperMax)]
+    [InlineData(250, ForceMath.DamperMax)]
+    [InlineData(-3, 0)]
+    public void The_curve_damping_slider_scales_to_a_damper_strength_and_is_clamped(int percent, int expected) =>
+        Assert.Equal(expected, ForceMath.DamperCoefficient(percent));
+}
+
+public class CurveScalingTests
+{
+    private static ForceSettings Settings(int strength, int centre = 12, int floor = 0) => new()
+    {
+        CentringStyle = CentringCurve.StyleCurve, SpringPercent = strength, CentreDegrees = centre, PeakDegrees = 60,
+        LighteningPercent = 40, DampingPercent = 0, FloorPercent = floor,
+    };
+
+    [Fact]
+    public void Strength_100_is_half_of_the_wheels_full_force_not_all_of_it()
+    {
+        var s = Settings(100);
+        double most = Enumerable.Range(0, 451).Max(a => Math.Abs(CentringCurve.Force(a, 0, s, 450)));
+        Assert.Equal(CentringCurve.CurveMax, most, 3);
+        Assert.Equal(0.5, CentringCurve.CurveMax);
+    }
+
+    [Theory]
+    [InlineData(5)]
+    [InlineData(20)]
+    [InlineData(30)]
+    [InlineData(60)]
+    [InlineData(100)]
+    public void The_pull_never_rises_faster_than_the_wheel_can_be_trusted_with(int strength)
+    {
+        // The wheel swung by itself, 18 degrees either side, when the pull rose to 85% of full force within 12 degrees. Whatever the strength and
+        // however short the centre zone is set, the rise per degree is held to the limit.
+        foreach (int centre in new[] { 1, 6, 12, 45 })
+        {
+            var s = Settings(strength, centre);
+            double previous = CentringCurve.Force(1.0, 0, s, 450), worst = 0;
+            for (double a = 2; a <= 120; a += 1)
+            {
+                double now = CentringCurve.Force(a, 0, s, 450);
+                worst = Math.Max(worst, Math.Abs(now - previous));
+                previous = now;
+            }
+            Assert.True(worst <= CentringCurve.MaxPullPerDegree * 1.05, $"strength {strength}, centre {centre}: {worst} per degree");
+        }
+    }
+
+    [Fact]
+    public void A_gentle_curve_keeps_the_centre_zone_that_was_set_and_a_strong_one_widens_it()
+    {
+        Assert.Equal(12, CentringCurve.EffectiveCentre(Settings(10, centre: 12)));
+        Assert.True(CentringCurve.EffectiveCentre(Settings(100, centre: 12)) > 40);
+        Assert.True(CentringCurve.EffectiveCentre(Settings(100, centre: 1)) <= 90);
+        Assert.Equal(1, CentringCurve.EffectiveCentre(Settings(0, centre: 1)));
+    }
+
+    [Fact]
+    public void The_floor_also_rises_no_faster_than_the_limit_over_the_centre_zone()
+    {
+        var s = Settings(10, centre: 3, floor: 30);          // a strong floor over a short zone
+        double previous = CentringCurve.Force(1.0, 0, s, 450), worst = 0;
+        for (double a = 2; a <= 20; a += 1)
+        {
+            double now = CentringCurve.Force(a, 0, s, 450);
+            worst = Math.Max(worst, Math.Abs(now - previous));
+            previous = now;
+        }
+        // The floor ramps over the centre zone, which is as short as set, so this one is allowed to be steeper than the pull itself:
+        // it is the least force that turns the wheel, a few percent, not a strong pull. A measured floor is typically 5% or less.
+        Assert.True(worst <= 0.30 / 3 + 1e-9);
     }
 }

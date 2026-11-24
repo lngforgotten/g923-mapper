@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
@@ -122,6 +122,7 @@ public partial class RuleEditorWindow : Window
         HideWheelBox.ItemsSource = new[] { "Leave the wheel as it is", "Hide the wheel while its game runs", "Show the wheel while its game runs" };
         HideWheelBox.SelectedIndex = copy.HideWheel is true ? 1 : copy.HideWheel is false ? 2 : 0;
         LeaveWheelBox.IsChecked = copy.LeaveWheel;
+        KeepKeysBox.IsChecked = copy.KeepKeys;
         FeelMotors.ItemsSource = new[] { "Both motors", "Heavy only", "Light only" };
         FeelBox.IsChecked = copy.Force is { IsEmpty: false };
         ShowFeelValues(copy.Force);
@@ -571,7 +572,9 @@ public partial class RuleEditorWindow : Window
             ? "Rules keep the Xbox names: A = Cross, B = Circle, X = Square, Y = Triangle, shoulders = L1/R1, triggers = L2/R2, Back = Share, Start = Options, Guide = PS button."
             : "Works with nearly every PC game.";
         UpdateFeelUi();
-        HideWheelHint.Text = LeaveWheelBox.IsChecked == true ? "No wheel and no virtual controller while this profile is in use; rules and feel do nothing."
+        KeepKeysBox.IsEnabled = LeaveWheelBox.IsChecked == true;
+        HideWheelHint.Text = LeaveWheelBox.IsChecked == true ? (KeepKeysBox.IsChecked == true ? "The game keeps the wheel and its force feedback. Only the keyboard and mouse rules run; there is no virtual controller."
+                                                                                          : "No wheel and no virtual controller while this profile is in use; rules and feel do nothing.")
             : HideWheelBox.SelectedIndex == 1 ? "Only when this profile switches on because its game was detected (see Games above); shown again when the game ends."
             : HideWheelBox.SelectedIndex == 2 ? "Only when this profile switches on because its game was detected: makes sure the wheel is visible then." : "";
         UpdateVisibility();   // turbo depends on the same checks
@@ -631,6 +634,7 @@ public partial class RuleEditorWindow : Window
         Safety = IsStandard ? ProfileSafety.Standard : ProfileSafety.Strict,
         HideWheel = HideWheelBox.SelectedIndex switch { 1 => true, 2 => false, _ => null },
         LeaveWheel = LeaveWheelBox.IsChecked == true,
+        KeepKeys = LeaveWheelBox.IsChecked == true && KeepKeysBox.IsChecked == true,
         Force = _view < 0 ? ForceFromUi() : _profileForce,
         Modes = _modes.Select((m, i) => new ProfileMode
         {
@@ -881,6 +885,7 @@ public partial class RuleEditorWindow : Window
         DeviceBox.SelectedItem = ((IEnumerable<string>)DeviceBox.ItemsSource).FirstOrDefault(n => n.Equals(p.Device, StringComparison.OrdinalIgnoreCase)) ?? p.Device;
         HideWheelBox.SelectedIndex = p.HideWheel is true ? 1 : p.HideWheel is false ? 2 : 0;
         LeaveWheelBox.IsChecked = p.LeaveWheel;
+        KeepKeysBox.IsChecked = p.KeepKeys;
         FeelBox.IsChecked = p.Force is { IsEmpty: false };
         ShowFeelValues(p.Force);
         PadBox.SelectedItem = PadChoiceOf(p);
@@ -1101,3 +1106,4 @@ public partial class RuleEditorWindow : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 }
+

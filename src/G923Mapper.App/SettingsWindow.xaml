@@ -204,11 +204,20 @@
                                         ToolTip="The weakest pull the curve ever uses away from the middle. Set it to the least force that moves your wheel (Measure does this) and the wheel always comes home." />
                                 <TextBlock x:Name="FloorText" Grid.Column="2" Style="{StaticResource ValueText}" />
                             </Grid>
+                            <CheckBox x:Name="ReversedBox" Content="This wheel pushes the other way round" Margin="0,12,0,0" Checked="Reversed_Changed" Unchecked="Reversed_Changed"
+                                      ToolTip="Measure wheel sets this by itself. If the wheel is pushed away from the middle instead of towards it, or swings left and right, tick or untick this." />
                             <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                                <Button x:Name="MeasureButton" Content="Measure wheel" Style="{StaticResource Secondary}" Click="Measure_Click"
+                                <Button x:Name="MeasureButton" Content="Measure wheel" Style="{StaticResource Secondary}" VerticalAlignment="Top" Click="Measure_Click"
                                         ToolTip="Take your hands off the wheel first. The force is raised very slowly until the wheel starts to turn; that gives the least pull and which way this wheel pushes. The curve only runs on a wheel that has been measured." />
-                                <TextBlock x:Name="MeasureStatus" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="14,0,0,0" TextWrapping="Wrap" MaxWidth="380" />
+                                <TextBlock x:Name="MeasureStatus" Style="{StaticResource Muted}" VerticalAlignment="Top" Margin="14,6,0,0" TextWrapping="Wrap" MaxWidth="380" />
                             </StackPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <Button x:Name="TraceButton" Content="Record 10 seconds" Style="{StaticResource Secondary}" VerticalAlignment="Top" Click="Trace_Click"
+                                        ToolTip="Records where the wheel is and the force being sent for ten seconds, saved as a file in the log folder with a one-line verdict (settled, or keeps swinging). Start it, give the wheel a small nudge, and let go." />
+                                <TextBlock x:Name="TraceStatus" Style="{StaticResource Muted}" VerticalAlignment="Top" Margin="14,6,0,0" TextWrapping="Wrap" MaxWidth="380" />
+                            </StackPanel>
+                            <TextBlock Style="{StaticResource Hint}"
+                                       Text="Logitech G HUB has a centring spring of its own, which adds to this curve and can disturb the measurement. For the cleanest result turn it off in G HUB (the wheel's settings there) while you use the curve. If the wheel swings left and right after measuring, raise Damping a little, lower the strength, or flip the checkbox above." />
                         </StackPanel>
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="220" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>

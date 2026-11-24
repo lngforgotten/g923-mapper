@@ -122,6 +122,7 @@ public static class Templates
             if (Has(root, "safety")) r.Safety = child.Safety;
             if (Has(root, "hideWheel")) r.HideWheel = child.HideWheel;
             if (Has(root, "leaveWheel")) r.LeaveWheel = child.LeaveWheel;
+            if (Has(root, "keepKeys")) r.KeepKeys = child.KeepKeys;
             if (Has(root, "outputs"))
             {
                 JsonElement o = Get(root, "outputs");
@@ -187,6 +188,7 @@ public static class Templates
         Add("outputs.secondPad", "Second controller", b.Outputs.SecondPad ? "on" : "off", child.Outputs.SecondPad ? "on" : "off");
         Add("hideWheel", "Hide the wheel", b.HideWheel is bool hb ? (hb ? "hide" : "show") : "leave", child.HideWheel is bool hc ? (hc ? "hide" : "show") : "leave");
         Add("leaveWheel", "Leave the wheel alone", b.LeaveWheel ? "on" : "off", child.LeaveWheel ? "on" : "off");
+        Add("keepKeys", "Keep sending keys", b.KeepKeys ? "on" : "off", child.KeepKeys ? "on" : "off");
         Add("force.rumble", "Rumble strength", Opt(b.Force?.Rumble), Opt(child.Force?.Rumble));
         Add("force.spring", "Centring spring", Opt(b.Force?.Spring), Opt(child.Force?.Spring));
         Add("force.friction", "Wheel friction", Opt(b.Force?.Friction), Opt(child.Force?.Friction));
@@ -261,6 +263,7 @@ public static class Templates
 
         if (diffs.Contains("hideWheel")) sb.AppendLine(child.HideWheel is bool hw ? $"  \"hideWheel\": {(hw ? "true" : "false")}," : "  \"hideWheel\": null,");
         if (diffs.Contains("leaveWheel")) sb.AppendLine($"  \"leaveWheel\": {(child.LeaveWheel ? "true" : "false")},");
+        if (diffs.Contains("keepKeys")) sb.AppendLine($"  \"keepKeys\": {(child.KeepKeys ? "true" : "false")},");
 
         var force = new List<string>();
         if (diffs.Contains("force.rumble")) force.Add($"\"rumble\": {(child.Force?.Rumble is int ru ? ru.ToString() : "null")}");
@@ -363,6 +366,7 @@ public static class Templates
             case "outputs.secondPad": child.Outputs.SecondPad = b.Outputs.SecondPad; break;
             case "hideWheel": child.HideWheel = b.HideWheel; break;
             case "leaveWheel": child.LeaveWheel = b.LeaveWheel; break;
+            case "keepKeys": child.KeepKeys = b.KeepKeys; break;
             case "force.rumble": SetForce(child, f => f.Rumble = b.Force?.Rumble); break;
             case "force.spring": SetForce(child, f => f.Spring = b.Force?.Spring); break;
             case "force.friction": SetForce(child, f => f.Friction = b.Force?.Friction); break;
