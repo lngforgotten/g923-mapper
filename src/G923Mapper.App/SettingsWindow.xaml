@@ -143,7 +143,7 @@
                         </Grid>
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
-                            <TextBlock Text="Centring spring" VerticalAlignment="Center" />
+                            <TextBlock Text="Centring strength" VerticalAlignment="Center" />
                             <Slider x:Name="SpringSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="10" ValueChanged="Force_ValueChanged" VerticalAlignment="Center" />
                             <TextBlock x:Name="SpringText" Grid.Column="2" Style="{StaticResource ValueText}" />
                         </Grid>
@@ -154,6 +154,62 @@
                                     ToolTip="A steady resistance to turning the wheel at any speed, like a heavier wheel. It does not pull back to centre." />
                             <TextBlock x:Name="FrictionText" Grid.Column="2" Style="{StaticResource ValueText}" />
                         </Grid>
+                        <Grid Margin="0,8,0,0">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="220" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="Centring style" VerticalAlignment="Center" />
+                            <ComboBox x:Name="CentringStyleBox" Grid.Column="1" SelectionChanged="CentringStyle_Changed"
+                                      ToolTip="Straight spring is the wheel's own spring: simple, and the same pull at every angle. Curve is worked out by this app from where the wheel is, so the pull can build, peak and ease off like a real steering rack." />
+                        </Grid>
+                        <StackPanel x:Name="CurvePanel" Margin="0,10,0,0" Visibility="Collapsed">
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="220" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                                <TextBlock Text="Car" VerticalAlignment="Center" />
+                                <ComboBox x:Name="CentringPresetBox" Grid.Column="1" SelectionChanged="CentringPreset_Changed"
+                                          ToolTip="A starting point for the shape and strength. Change any slider afterwards and it becomes Custom." />
+                            </Grid>
+                            <TextBlock x:Name="CurveCaption" Style="{StaticResource Muted}" Margin="0,10,0,4" />
+                            <local:CentringGraph x:Name="CurveGraph" Height="150" />
+                            <Grid Margin="0,10,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
+                                <TextBlock Text="Centre zone" VerticalAlignment="Center" />
+                                <Slider x:Name="CentreSlider" Grid.Column="1" Minimum="1" Maximum="45" TickFrequency="1" IsSnapToTickEnabled="True" ValueChanged="Force_ValueChanged" VerticalAlignment="Center"
+                                        ToolTip="Degrees either side of straight ahead over which the pull ramps up from nothing, so the middle is not twitchy." />
+                                <TextBlock x:Name="CentreText" Grid.Column="2" Style="{StaticResource ValueText}" />
+                            </Grid>
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
+                                <TextBlock Text="Peak angle" VerticalAlignment="Center" />
+                                <Slider x:Name="PeakSlider" Grid.Column="1" Minimum="10" Maximum="180" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="Force_ValueChanged" VerticalAlignment="Center"
+                                        ToolTip="The angle at which the pull is strongest." />
+                                <TextBlock x:Name="PeakText" Grid.Column="2" Style="{StaticResource ValueText}" />
+                            </Grid>
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
+                                <TextBlock Text="Lightening" VerticalAlignment="Center" />
+                                <Slider x:Name="LightenSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="Force_ValueChanged" VerticalAlignment="Center"
+                                        ToolTip="How much of the peak pull is left at full lock. 100% means none is lost; lower values let the wheel go lighter the further it is turned." />
+                                <TextBlock x:Name="LightenText" Grid.Column="2" Style="{StaticResource ValueText}" />
+                            </Grid>
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
+                                <TextBlock Text="Damping" VerticalAlignment="Center" />
+                                <Slider x:Name="DampSlider" Grid.Column="1" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" ValueChanged="Force_ValueChanged" VerticalAlignment="Center"
+                                        ToolTip="Resists fast turns, so the wheel does not swing past the middle when you let go. Keep it small." />
+                                <TextBlock x:Name="DampText" Grid.Column="2" Style="{StaticResource ValueText}" />
+                            </Grid>
+                            <Grid Margin="0,8,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
+                                <TextBlock Text="Least pull" VerticalAlignment="Center" />
+                                <Slider x:Name="FloorSlider" Grid.Column="1" Minimum="0" Maximum="30" TickFrequency="1" IsSnapToTickEnabled="True" ValueChanged="Force_ValueChanged" VerticalAlignment="Center"
+                                        ToolTip="The weakest pull the curve ever uses away from the middle. Set it to the least force that moves your wheel (Measure does this) and the wheel always comes home." />
+                                <TextBlock x:Name="FloorText" Grid.Column="2" Style="{StaticResource ValueText}" />
+                            </Grid>
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                <Button x:Name="MeasureButton" Content="Measure wheel" Style="{StaticResource Secondary}" Click="Measure_Click"
+                                        ToolTip="Take your hands off the wheel first. The force is raised very slowly until the wheel starts to turn; that gives the least pull and which way this wheel pushes. The curve only runs on a wheel that has been measured." />
+                                <TextBlock x:Name="MeasureStatus" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="14,0,0,0" TextWrapping="Wrap" MaxWidth="380" />
+                            </StackPanel>
+                        </StackPanel>
                         <Grid Margin="0,8,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="220" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                             <TextBlock Text="Rumble to feel" VerticalAlignment="Center" />
@@ -237,11 +293,15 @@
                         </Grid>
                         <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
                             <TextBlock x:Name="UpdateMessage" Style="{StaticResource Muted}" VerticalAlignment="Center" TextWrapping="Wrap" />
-                            <Button x:Name="UpdateOpenButton" Content="Open the release page" Style="{StaticResource Secondary}" Margin="12,0,0,0" Visibility="Collapsed" Click="OpenUpdate_Click" />
+                            <Button x:Name="UpdateInstallButton" Content="Install now" Style="{StaticResource Primary}" Margin="12,0,0,0" Visibility="Collapsed" Click="InstallUpdate_Click"
+                                    ToolTip="Download the new version, then restart into it." />
+                            <Button x:Name="UpdateOpenButton" Content="Release page" Style="{StaticResource Secondary}" Margin="8,0,0,0" Visibility="Collapsed" Click="OpenUpdate_Click" />
                         </StackPanel>
                         <CheckBox x:Name="AutoUpdateBox" Content="Check for updates automatically (once a day)" Margin="0,10,0,0" Checked="AutoUpdate_Changed" Unchecked="AutoUpdate_Changed" />
+                        <CheckBox x:Name="AutoInstallBox" Content="Install new versions automatically" Margin="0,8,0,0" Checked="AutoInstall_Changed" Unchecked="AutoInstall_Changed"
+                                  ToolTip="Download a new version in the background and put it in place the next time the app starts. Home also offers Restart now." />
                         <TextBlock Style="{StaticResource Hint}"
-                                   Text="One request to GitHub for that repository's latest release, a little after start-up and about once a day, with no personal information. If there is a newer version Home says so and offers the download page; nothing is installed for you. Untick it and the app only looks when you press the button." />
+                                   Text="One request to GitHub for that repository's latest release, a little after start-up and about once a day, with no personal information. With automatic installing on, a new version is downloaded in the background, checked against the checksum GitHub publishes for it, and put in place the next time the app starts (or when you press Restart now on Home); your profiles and settings are kept. Untick it and Home only offers the new version; untick the check as well and the app only looks when you press the button. A copy that is not installed with Setup is never replaced." />
                         <TextBlock Style="{StaticResource Hint}"
                                    Text="Everything runs on this PC. The app only creates a virtual controller from outside your games; it never touches a game's files or memory." />
                     </StackPanel>

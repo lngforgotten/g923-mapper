@@ -88,6 +88,8 @@
                     <TextBlock Text="Wheel" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
                     <ComboBox x:Name="HideWheelBox" Width="290" SelectionChanged="Profile_Changed" VerticalAlignment="Center"
                               ToolTip="With HidHide installed, a profile can hide the real wheel from games while its game is running, and give it back afterwards. It never happens just because the profile is selected. Each change asks for administrator permission." />
+                    <CheckBox x:Name="LeaveWheelBox" Content="Leave the wheel alone" Margin="16,0,0,0" VerticalAlignment="Center" Checked="Profile_Changed" Unchecked="Profile_Changed"
+                              ToolTip="For a game with its own wheel support (force feedback included). While this profile is in use the mapper lets go of the wheel and creates no virtual controller, so the game has the wheel to itself. The profile's rules do nothing." />
                     <TextBlock x:Name="HideWheelHint" Style="{StaticResource Hint}" Margin="14,0,0,0" VerticalAlignment="Center" />
                 </StackPanel>
                 <WrapPanel x:Name="ModeRow" Grid.Row="7" Grid.ColumnSpan="6" Margin="0,10,0,0">

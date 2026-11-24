@@ -107,6 +107,7 @@ public partial class MainWindow : Window
             MapperState.Running => ($"Running: {Service.WheelName}", Green),
             MapperState.WaitingForWheel => ("Waiting for the wheel", Amber),
             MapperState.Error => ("Problem", Red),
+            MapperState.StandingAside => ("Standing aside: the game has the wheel", Grey),
             _ => ("Stopped", Grey),
         };
         StatusDot.Fill = dot;
@@ -209,9 +210,44 @@ public partial class MainWindow : Window
     private void ShowUpdate()
     {
         UpdateInfo? info = _s.AvailableUpdate;
-        bool show = info is { Newer: true } && info.LatestTag != Settings.UpdateDismissedTag;
+        UpdatePhase phase = _s.UpdatePhase;
+        // A download that is running, or an update that is ready, is always shown; an offer can be put off with Later.
+        bool show = info is { Newer: true } && (phase is UpdatePhase.Downloading or UpdatePhase.Ready || info.LatestTag != Settings.UpdateDismissedTag);
         UpdatePanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        if (show) UpdateText.Text = $"Version {info!.LatestTag} is available.";
+        if (!show) return;
+
+        string tag = info!.LatestTag;
+        switch (phase)
+        {
+            case UpdatePhase.Downloading:
+                UpdateText.Text = $"Downloading version {tag}… {_s.UpdatePercent}%";
+                UpdateActionButton.Visibility = UpdateNotesButton.Visibility = UpdateLaterButton.Visibility = Visibility.Collapsed;
+                break;
+            case UpdatePhase.Ready:
+                UpdateText.Text = $"Version {tag} is ready. It installs by itself the next time the app starts.";
+                UpdateActionButton.Content = "Restart now";
+                UpdateActionButton.ToolTip = "Close the app and start the new version straight away.";
+                UpdateActionButton.Visibility = UpdateNotesButton.Visibility = UpdateLaterButton.Visibility = Visibility.Visible;
+                break;
+            case UpdatePhase.Failed:
+                UpdateText.Text = $"Version {tag} is available, but it could not be installed here: {_s.UpdateProblem}";
+                UpdateActionButton.Content = "Try again";
+                UpdateActionButton.ToolTip = "Download and install it now.";
+                UpdateActionButton.Visibility = UpdateNotesButton.Visibility = UpdateLaterButton.Visibility = Visibility.Visible;
+                break;
+            default:
+                UpdateText.Text = $"Version {tag} is available.";
+                UpdateActionButton.Content = "Install now";
+                UpdateActionButton.ToolTip = "Download it, then restart into the new version.";
+                UpdateActionButton.Visibility = UpdateNotesButton.Visibility = UpdateLaterButton.Visibility = Visibility.Visible;
+                break;
+        }
+    }
+
+    private async void UpdateAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (_s.UpdatePhase == UpdatePhase.Ready) _s.RestartForUpdate?.Invoke();
+        else if (_s.InstallUpdateNow is { } install) await install();
     }
 
     private void UpdateDownload_Click(object sender, RoutedEventArgs e)

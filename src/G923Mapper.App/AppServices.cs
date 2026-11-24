@@ -29,6 +29,14 @@ public sealed class AppServices
     /// <summary>A newer version the automatic check found (null if none), and a callback for the window to show it.</summary>
     public UpdateInfo? AvailableUpdate { get; set; }
     public Action? UpdateChanged { get; set; }
+    /// <summary>Where the update is: found, being downloaded, ready to swap in, or the download failed.</summary>
+    public UpdatePhase UpdatePhase { get; set; }
+    public int UpdatePercent { get; set; }
+    public string UpdateProblem { get; set; } = "";
+    /// <summary>Download the new version now and restart into it (the "Install now" button).</summary>
+    public Func<System.Threading.Tasks.Task>? InstallUpdateNow { get; set; }
+    /// <summary>Swap in the update that is ready and start the new version (the "Restart now" button).</summary>
+    public Action? RestartForUpdate { get; set; }
 
     /// <summary>Whether HidHide currently hides the wheel. Cached, because asking HidHide takes a moment.</summary>
     public bool WheelHidden { get; private set; }

@@ -43,6 +43,12 @@ public partial class App : Application
             return;
         }
         _instance = instance;
+
+        // An update that was downloaded earlier is swapped in now, before anything else starts, and the new version takes over.
+        if (instance == 1 && TryApplyStagedAtStart(e.Args)) { Shutdown(); return; }
+        if (Environment.ProcessPath is { } runningExe && UpdatePackage.IsInstalledCopy(runningExe, InstallDir))
+            Task.Run(() => UpdatePackage.CleanOld(runningExe));       // the programs earlier updates left aside
+
         StartShowListener(instance);
         try
         {
@@ -118,6 +124,8 @@ public partial class App : Application
             _hotkeys = new HotkeyManager(_hwnd, () => _window.Dispatcher.BeginInvoke(TogglePause));
             _modeHotkeys = new HotkeyManager(_hwnd, () => service.RequestMode("Next"), 0x6924);   // the loop does the switching, from any thread
             service.ModeChanged += OnModeChanged;
+            _services.RestartForUpdate = RestartForUpdate;
+            _services.InstallUpdateNow = InstallUpdateNowAsync;
             _autoUpdate = new AutoUpdate(_services, OnUpdateFound);
             _autoUpdate.Start();
             _services.ApplyInputOptions = ApplyInputOptions;
@@ -268,19 +276,172 @@ public partial class App : Application
     private HotkeyManager? _modeHotkeys;
     private AutoUpdate? _autoUpdate;
 
-    /// <summary>The automatic check found a newer version: Home shows it, and Windows says so once for each version.</summary>
+    // ---------------------------------------------------------------- updating itself
+
+    private static string InstallDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Programs", "G923Mapper");
+    private static Version RunningVersion => typeof(App).Assembly.GetName().Version ?? new Version(1, 0, 0);
+    private string? _stagedTag;
+
+    private void UpdateUi() => _window?.Dispatcher.BeginInvoke(() => _services?.UpdateChanged?.Invoke());
+
+    /// <summary>
+    /// A newer version was found (by the automatic check or by the button). With automatic installing on it is downloaded and checked in the
+    /// background and swapped in the next time the app starts; otherwise Home offers it and Windows says so once for each version.
+    /// </summary>
     private void OnUpdateFound(UpdateInfo info)
     {
         if (_services is not { } s) return;
         s.AvailableUpdate = info;
+        bool busy = s.UpdatePhase == UpdatePhase.Downloading;
+        bool alreadyReady = s.UpdatePhase == UpdatePhase.Ready && _stagedTag == info.LatestTag;
+        if (!busy && !alreadyReady) s.UpdatePhase = UpdatePhase.Available;
         _window?.Dispatcher.BeginInvoke(() =>
         {
             s.UpdateChanged?.Invoke();
+            if (s.Settings.AutoInstallUpdates && s.UpdatePhase == UpdatePhase.Available)
+            {
+                _ = StageUpdateAsync(info, thenRestart: false);
+                return;
+            }
             if (s.Settings.UpdateNotifiedTag == info.LatestTag || s.Settings.UpdateDismissedTag == info.LatestTag) return;
             s.Settings.UpdateNotifiedTag = info.LatestTag;
             s.Settings.Save();
-            _tray?.ShowBalloon("A new version is available", $"G923 Mapper {info.LatestTag} is out. Open the app to download it.");
+            _tray?.ShowBalloon("A new version is available", $"G923 Mapper {info.LatestTag} is out. Open the app to install it.");
         });
+    }
+
+    /// <summary>The "Install now" button: download the new version if it is not ready yet, then restart into it.</summary>
+    private async Task InstallUpdateNowAsync()
+    {
+        if (_services is not { } s) return;
+        if (s.UpdatePhase == UpdatePhase.Ready) { RestartForUpdate(); return; }
+        if (s.AvailableUpdate is { Newer: true } info) await StageUpdateAsync(info, thenRestart: true);
+    }
+
+    /// <summary>Download and check a new version. It then waits to be swapped in, or, when asked to, the app restarts into it straight away.</summary>
+    private async Task StageUpdateAsync(UpdateInfo info, bool thenRestart)
+    {
+        if (_services is not { } s || s.UpdatePhase == UpdatePhase.Downloading) return;
+        if (!UpdatePackage.IsInstalledCopy(Environment.ProcessPath, InstallDir))
+        {
+            s.UpdatePhase = UpdatePhase.Failed;
+            s.UpdateProblem = "This copy runs from a folder rather than where Setup installs it, so it does not update itself. Use the release page.";
+            UpdateUi();
+            return;
+        }
+
+        s.UpdatePhase = UpdatePhase.Downloading; s.UpdatePercent = 0; s.UpdateProblem = "";
+        UpdateUi();
+        var progress = new Progress<int>(p => { s.UpdatePercent = p; UpdateUi(); });
+        var (staged, message) = await UpdateInstaller.StageAsync(info, s.Settings.UpdateRepo, progress);
+        if (staged is null)
+        {
+            s.UpdatePhase = UpdatePhase.Failed; s.UpdateProblem = message;
+            AppLog.Warn("Update " + info.LatestTag + ": " + message);
+            UpdateUi();
+            return;
+        }
+
+        _stagedTag = staged.Tag;
+        s.UpdatePhase = UpdatePhase.Ready;
+        AppLog.Info($"Update {staged.Tag} is downloaded and checked. It is installed the next time the app starts.");
+        UpdateUi();
+        if (thenRestart) { RestartForUpdate(); return; }
+        if (s.Settings.UpdateNotifiedTag != staged.Tag)
+        {
+            s.Settings.UpdateNotifiedTag = staged.Tag;
+            s.Settings.Save();
+            _tray?.ShowBalloon($"G923 Mapper {staged.Tag} is ready", "It installs by itself the next time the app starts. Open the app and press Restart now to use it straight away.");
+        }
+    }
+
+    /// <summary>Swap the ready update in and start the new version. The running program is renamed, not overwritten, so this works while it runs.</summary>
+    private void RestartForUpdate()
+    {
+        if (_services is null) return;
+        string? exe = Environment.ProcessPath;
+        StagedUpdate? staged = UpdatePackage.ReadStaged(AppSettings.StagedDir);
+        if (staged is null || !UpdatePackage.IsNewer(staged, RunningVersion) || exe is null || !UpdatePackage.IsInstalledCopy(exe, InstallDir))
+        {
+            MessageBox.Show("There is no update ready to install.", "G923 Mapper", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+        if (!UpdatePackage.Swap(staged.ExePath, exe, out string problem))
+        {
+            MessageBox.Show("The update could not be installed, so nothing was changed:\n\n" + problem, "G923 Mapper", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        FinishSwap(staged);
+        LaunchLater(exe, Environment.GetCommandLineArgs().Skip(1));
+        ExitApp();
+    }
+
+    /// <summary>Right after a swap: tidy the stage and tell Windows' list of installed apps which version is now installed.</summary>
+    private static void FinishSwap(StagedUpdate staged)
+    {
+        AppLog.Info($"Updated to {staged.Tag}.");
+        UpdatePackage.ClearStaged(AppSettings.UpdateDir);
+        try
+        {
+            using var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Uninstall\G923Mapper", writable: true);
+            key?.SetValue("DisplayVersion", staged.Version.ToString(3));
+        }
+        catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException or IOException) { }
+    }
+
+    /// <summary>At start-up: swap in an update that is waiting. True when the new version has been started and this copy should close.</summary>
+    private bool TryApplyStagedAtStart(string[] args)
+    {
+        try
+        {
+            StagedUpdate? staged = UpdatePackage.ReadStaged(AppSettings.StagedDir);
+            if (staged is null) return false;
+            if (!UpdatePackage.IsNewer(staged, RunningVersion)) { UpdatePackage.ClearStaged(AppSettings.UpdateDir); return false; }   // already on it
+            string? exe = Environment.ProcessPath;
+            if (exe is null || !UpdatePackage.IsInstalledCopy(exe, InstallDir)) return false;
+            if (!UpdatePackage.Swap(staged.ExePath, exe, out string problem)) { AppLog.Warn("Update at start-up: " + problem); return false; }
+            FinishSwap(staged);
+            LaunchLater(exe, args);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            AppLog.Warn("Update at start-up failed: " + ex.Message);
+            return false;
+        }
+    }
+
+    /// <summary>When the app closes: swap in an update that is waiting, so the next start is the new version.</summary>
+    private void ApplyStagedAtExit()
+    {
+        if (_instance != 1) return;
+        try
+        {
+            StagedUpdate? staged = UpdatePackage.ReadStaged(AppSettings.StagedDir);
+            string? exe = Environment.ProcessPath;
+            if (staged is null || !UpdatePackage.IsNewer(staged, RunningVersion) || exe is null || !UpdatePackage.IsInstalledCopy(exe, InstallDir)) return;
+            if (UpdatePackage.Swap(staged.ExePath, exe, out string problem)) FinishSwap(staged);
+            else AppLog.Warn("Update at exit: " + problem);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or InvalidOperationException)
+        {
+            AppLog.Warn("Update at exit failed: " + ex.Message);
+        }
+    }
+
+    /// <summary>Start the program again in a few seconds, once this copy has gone and let go of its single-copy lock.</summary>
+    private static void LaunchLater(string exe, System.Collections.Generic.IEnumerable<string>? args)
+    {
+        string extra = string.Join(" ", (args ?? []).Select(a => "\"" + a.Replace("\"", "") + "\""));
+        try
+        {
+            Process.Start(new ProcessStartInfo("cmd.exe", $"/c ping -n 4 127.0.0.1 >nul & start \"\" \"{exe}\" {extra}")
+            { CreateNoWindow = true, UseShellExecute = false, WindowStyle = ProcessWindowStyle.Hidden });
+        }
+        catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+            AppLog.Warn("Could not start the new version: " + ex.Message);
+        }
     }
 
     /// <summary>A mode was switched: a Windows notification, if the user wants one. (The wheel buzz is done by the mapper itself.)</summary>
@@ -503,6 +664,7 @@ public partial class App : Application
             _tray?.Dispose();
             _services?.Store.Dispose();
             _window?.Close();
+            ApplyStagedAtExit();
             AppLog.Info("G923 Mapper exiting.");
             try { _showEvent?.Dispose(); } catch (ObjectDisposedException) { }
             foreach (Mutex m in _mutexes) { try { m.ReleaseMutex(); } catch (ApplicationException) { } m.Dispose(); }

@@ -28,9 +28,11 @@
                     <TextBlock x:Name="StatusTitle" FontSize="17" FontWeight="SemiBold" Text="Starting…" TextTrimming="CharacterEllipsis" />
                     <TextBlock x:Name="StatusDetail" Style="{StaticResource Muted}" Margin="0,2,0,0" />
                     <StackPanel x:Name="UpdatePanel" Orientation="Horizontal" Margin="0,8,0,0" Visibility="Collapsed">
-                        <TextBlock x:Name="UpdateText" Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center" />
-                        <Button Content="Download" Style="{StaticResource Primary}" Padding="12,4" Margin="12,0,0,0" Click="UpdateDownload_Click" />
-                        <Button Content="Later" Style="{StaticResource Secondary}" Padding="12,4" Margin="6,0,0,0" Click="UpdateLater_Click"
+                        <TextBlock x:Name="UpdateText" Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="560" />
+                        <Button x:Name="UpdateActionButton" Content="Install now" Style="{StaticResource Primary}" Padding="12,4" Margin="12,0,0,0" Click="UpdateAction_Click" />
+                        <Button x:Name="UpdateNotesButton" Content="What's new" Style="{StaticResource Secondary}" Padding="12,4" Margin="6,0,0,0" Click="UpdateDownload_Click"
+                                ToolTip="Open the release page on GitHub." />
+                        <Button x:Name="UpdateLaterButton" Content="Later" Style="{StaticResource Secondary}" Padding="12,4" Margin="6,0,0,0" Click="UpdateLater_Click"
                                 ToolTip="Hide this until an even newer version comes out." />
                     </StackPanel>
                 </StackPanel>

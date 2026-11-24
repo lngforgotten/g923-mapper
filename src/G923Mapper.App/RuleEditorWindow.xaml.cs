@@ -121,6 +121,7 @@ public partial class RuleEditorWindow : Window
         ExeBox.Text = string.Join(", ", copy.Match.Exe);
         HideWheelBox.ItemsSource = new[] { "Leave the wheel as it is", "Hide the wheel while its game runs", "Show the wheel while its game runs" };
         HideWheelBox.SelectedIndex = copy.HideWheel is true ? 1 : copy.HideWheel is false ? 2 : 0;
+        LeaveWheelBox.IsChecked = copy.LeaveWheel;
         FeelMotors.ItemsSource = new[] { "Both motors", "Heavy only", "Light only" };
         FeelBox.IsChecked = copy.Force is { IsEmpty: false };
         ShowFeelValues(copy.Force);
@@ -570,7 +571,8 @@ public partial class RuleEditorWindow : Window
             ? "Rules keep the Xbox names: A = Cross, B = Circle, X = Square, Y = Triangle, shoulders = L1/R1, triggers = L2/R2, Back = Share, Start = Options, Guide = PS button."
             : "Works with nearly every PC game.";
         UpdateFeelUi();
-        HideWheelHint.Text = HideWheelBox.SelectedIndex == 1 ? "Only when this profile switches on because its game was detected (see Games above); shown again when the game ends."
+        HideWheelHint.Text = LeaveWheelBox.IsChecked == true ? "No wheel and no virtual controller while this profile is in use; rules and feel do nothing."
+            : HideWheelBox.SelectedIndex == 1 ? "Only when this profile switches on because its game was detected (see Games above); shown again when the game ends."
             : HideWheelBox.SelectedIndex == 2 ? "Only when this profile switches on because its game was detected: makes sure the wheel is visible then." : "";
         UpdateVisibility();   // turbo depends on the same checks
     }
@@ -628,6 +630,7 @@ public partial class RuleEditorWindow : Window
         },
         Safety = IsStandard ? ProfileSafety.Standard : ProfileSafety.Strict,
         HideWheel = HideWheelBox.SelectedIndex switch { 1 => true, 2 => false, _ => null },
+        LeaveWheel = LeaveWheelBox.IsChecked == true,
         Force = _view < 0 ? ForceFromUi() : _profileForce,
         Modes = _modes.Select((m, i) => new ProfileMode
         {
@@ -877,6 +880,7 @@ public partial class RuleEditorWindow : Window
         _populating = true;
         DeviceBox.SelectedItem = ((IEnumerable<string>)DeviceBox.ItemsSource).FirstOrDefault(n => n.Equals(p.Device, StringComparison.OrdinalIgnoreCase)) ?? p.Device;
         HideWheelBox.SelectedIndex = p.HideWheel is true ? 1 : p.HideWheel is false ? 2 : 0;
+        LeaveWheelBox.IsChecked = p.LeaveWheel;
         FeelBox.IsChecked = p.Force is { IsEmpty: false };
         ShowFeelValues(p.Force);
         PadBox.SelectedItem = PadChoiceOf(p);

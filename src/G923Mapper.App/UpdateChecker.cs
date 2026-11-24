@@ -1,5 +1,6 @@
 using System;
 using System.Net.Http;
+using System.IO;
 using System.Threading.Tasks;
 using System.Windows.Threading;
 
@@ -89,4 +90,92 @@ internal sealed class AutoUpdate : IDisposable
     }
 
     public void Dispose() { _timer.Stop(); _first.Stop(); }
+}
+
+/// <summary>Where a new version is in its way to being installed.</summary>
+public enum UpdatePhase { None, Available, Downloading, Ready, Failed }
+
+/// <summary>
+/// Downloads a new version from the repository's GitHub release and gets it ready: the zip that matches how this copy was installed (the full build
+/// or the small one), checked against the checksum GitHub publishes for it, with only G923Mapper.exe taken out of it and its version checked.
+/// Nothing is installed here; the ready program waits in the app's data folder until it is swapped in.
+/// </summary>
+internal static class UpdateInstaller
+{
+    private static readonly HttpClient Http = new() { Timeout = System.Threading.Timeout.InfiniteTimeSpan };
+
+    /// <summary>Whether this copy is the full build, which carries .NET with it, rather than the small one.</summary>
+    public static bool IsFullBuild()
+    {
+        string? exe = Environment.ProcessPath;
+        return exe is not null && System.IO.File.Exists(exe) && UpdatePackage.LooksSelfContained(new System.IO.FileInfo(exe).Length);
+    }
+
+    public static async Task<(StagedUpdate? Staged, string Message)> StageAsync(UpdateInfo info, string? repoText, IProgress<int>? progress, System.Threading.CancellationToken ct = default)
+    {
+        string? repo = UpdateCheck.NormaliseRepo(repoText);
+        if (repo is null) return (null, "No update repository is set.");
+        UpdateAsset? asset = UpdatePackage.Choose(info.Assets ?? [], IsFullBuild(), repo);
+        if (asset is null) return (null, "That release has no download for this build of the app.");
+        Version? version = UpdateCheck.ParseVersion(info.LatestTag);
+        if (version is null) return (null, "That release has no version number.");
+
+        string downloadDir = System.IO.Path.Combine(AppSettings.UpdateDir, "download");
+        string zip = System.IO.Path.Combine(downloadDir, asset.Name);
+        try
+        {
+            UpdatePackage.ClearStaged(AppSettings.UpdateDir);          // whatever was waiting before is replaced
+            System.IO.Directory.CreateDirectory(downloadDir);
+
+            using (var request = new HttpRequestMessage(HttpMethod.Get, asset.Url))
+            {
+                request.Headers.UserAgent.ParseAdd("G923Mapper");       // a generic name: nothing about you or this PC
+                using var timeout = System.Threading.CancellationTokenSource.CreateLinkedTokenSource(ct);
+                timeout.CancelAfter(TimeSpan.FromMinutes(20));
+                using var response = await Http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+                response.EnsureSuccessStatusCode();
+                if (response.RequestMessage?.RequestUri?.Scheme != Uri.UriSchemeHttps) return (null, "The download was not served over https, so it was not used.");
+                long total = response.Content.Headers.ContentLength ?? asset.Size;
+                await using var source = await response.Content.ReadAsStreamAsync(timeout.Token);
+                await using var target = System.IO.File.Create(zip);
+                var buffer = new byte[81920];
+                long done = 0; int lastPercent = -1;
+                int read;
+                while ((read = await source.ReadAsync(buffer, timeout.Token)) > 0)
+                {
+                    await target.WriteAsync(buffer.AsMemory(0, read), timeout.Token);
+                    done += read;
+                    int percent = total > 0 ? (int)Math.Min(99, done * 100 / total) : 0;
+                    if (percent != lastPercent) { lastPercent = percent; progress?.Report(percent); }
+                }
+            }
+
+            switch (UpdatePackage.CheckDigest(zip, asset.Sha256))
+            {
+                case DigestCheck.Mismatch:
+                    return (null, "The download does not match the checksum GitHub published for it, so it was thrown away.");
+                case DigestCheck.NoDigest:
+                    AppLog.Warn("GitHub gave no checksum for this download; relying on https from the repository's own release.");
+                    break;
+            }
+
+            string? exe = UpdatePackage.ExtractExe(zip, AppSettings.StagedDir, out string problem);
+            if (exe is null) return (null, problem);
+            Version? inside = UpdatePackage.FileVersion(exe);
+            if (inside is null || inside.Major != version.Major || inside.Minor != version.Minor || inside.Build != Math.Max(0, version.Build))
+            {
+                UpdatePackage.ClearStaged(AppSettings.UpdateDir);
+                return (null, $"The program in the download says it is version {inside?.ToString(3) ?? "(unknown)"}, not {version.ToString(3)}, so it was not used.");
+            }
+            UpdatePackage.WriteStaged(AppSettings.StagedDir, info.LatestTag, version, exe);
+            try { System.IO.Directory.Delete(downloadDir, recursive: true); } catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { }
+            progress?.Report(100);
+            return (UpdatePackage.ReadStaged(AppSettings.StagedDir), "");
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.IO.IOException or UnauthorizedAccessException)
+        {
+            UpdatePackage.ClearStaged(AppSettings.UpdateDir);
+            return (null, ex is TaskCanceledException ? "The download took too long." : "The download failed: " + ex.Message);
+        }
+    }
 }

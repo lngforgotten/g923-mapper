@@ -130,6 +130,11 @@ public sealed class Profile
     /// while this profile is in use. Left out: leave it as it is. Each change asks for administrator permission.
     /// </summary>
     public bool? HideWheel { get; set; }
+    /// <summary>
+    /// true: while this profile is in use the mapper lets go of the wheel completely (it opens no wheel and creates no virtual controller), so a
+    /// game with native wheel support, force feedback included, has the wheel to itself. The profile's rules do nothing while it is on.
+    /// </summary>
+    public bool LeaveWheel { get; set; }
     public List<Rule> Rules { get; set; } = new();
     /// <summary>Modes of this profile (see <see cref="ProfileMode"/>). Empty = the profile has just its own rules. A rule sending to "Mode:Next", "Mode:Previous" or "Mode:Name" switches between them.</summary>
     public List<ProfileMode> Modes { get; set; } = new();

@@ -3,7 +3,12 @@ using Vortice.DirectInput;
 
 namespace G923Mapper;
 
-public enum MapperState { Stopped, WaitingForWheel, Running, Error }
+public enum MapperState
+{
+    Stopped, WaitingForWheel, Running, Error,
+    /// <summary>The active profile leaves the wheel alone: no wheel is open and there is no virtual controller.</summary>
+    StandingAside,
+}
 
 /// <summary>Everything the UI wants to show about one moment of the mapping loop.</summary>
 public sealed record MapperSnapshot(RawInput Raw, InputFrame Input, PadState Pad, string ProfileName, DeviceMap Device)
@@ -194,13 +199,14 @@ public sealed class MapperService : IDisposable
     private double _lastAngle, _velocity;
     private long _lastAngleMs;
 
-    /// <summary>The wheel's angle in degrees from its centre (positive towards higher axis readings), and half its total turn.</summary>
-    private static bool TryAngle(RawInput raw, DeviceMap device, out double angle, out double half)
+    /// <summary>The wheel angle in degrees from its centre (positive towards higher axis readings), half its total turn, and the position in degrees with no centre at all (for measuring movement).</summary>
+    private static bool TryAngle(RawInput raw, DeviceMap device, out double angle, out double half, out double rawDegrees)
     {
-        angle = 0;
+        angle = 0; rawDegrees = 0;
         half = device.RotationDegrees / 2;
         if (!raw.Live || device.RotationDegrees <= 0 || !device.Axes.TryGetValue("wheel", out var wa) || wa.SourceIndex < 0 || wa.Max <= wa.Min) return false;
         angle = (raw.Axes[wa.SourceIndex] - wa.Centre) * device.RotationDegrees / (wa.Max - wa.Min);
+        rawDegrees = raw.Axes[wa.SourceIndex] * device.RotationDegrees / (wa.Max - wa.Min);   // not tied to the centre, which the centre tracker may move at any time
         return true;
     }
 
@@ -323,6 +329,26 @@ public sealed class MapperService : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// The profile in use leaves the wheel alone (a game with native wheel support, force feedback included, wants the wheel to itself): no wheel is
+    /// opened and no virtual controller is created, so nothing of ours is between the game and the wheel. Waits until another profile is chosen,
+    /// or this one is edited, and then returns so the session starts afresh.
+    /// </summary>
+    private void StandAside(Profile profile, CancellationToken ct)
+    {
+        _liveKeys?.ReleaseAll();
+        Latest = null;
+        WheelName = ""; WheelIds = ""; WheelUsbIds = null;
+        ForceActive = false; ForceSupported = false; CurveSupported = false; ForceMessage = "";
+        _probe = null;
+        _modeNames = []; _modeIndex = -1;
+        Set(MapperState.StandingAside, $"Leaving the wheel alone for \"{profile.Name}\"");
+        Emit($"\"{profile.Name}\" leaves the wheel alone: the mapper has let go of the wheel and the virtual controller, so the game has the wheel to itself.");
+        int seen = _store.Version;
+        _profileChanged = false; _restart = false;
+        while (!ct.IsCancellationRequested && !_profileChanged && !_restart && seen == _store.Version) ct.WaitHandle.WaitOne(200);
+    }
+
     /// <summary>One connected period: wheel found, pad created, loop running until cancelled or the wheel goes away.</summary>
     private void Session(CancellationToken ct)
     {
@@ -333,6 +359,8 @@ public sealed class MapperService : IDisposable
             for (int i = 0; i < 20 && !ct.IsCancellationRequested && v == _store.Version && !_profileChanged; i++) ct.WaitHandle.WaitOne(100);
             return;
         }
+
+        if (profile.LeaveWheel) { StandAside(profile, ct); return; }
 
         using IDirectInput8 di = DInput.DirectInput8Create();
         DeviceInstance? instance = DirectInputWheel.Find(di, _devices, DeviceRegistry.IsAuto(profile.Device) ? null : device, WheelIndex);
@@ -428,6 +456,12 @@ public sealed class MapperService : IDisposable
                     _profileChanged = false;
                     if (_store.Get(_profileName) is Profile fresh && _devices.Resolve(fresh.Device, WheelUsbIds) is DeviceMap freshDevice)
                     {
+                        // A profile that leaves the wheel alone: let go of the wheel and the pad, then the session starts again and stands aside.
+                        if (fresh.LeaveWheel)
+                        {
+                            Emit($"\"{fresh.Name}\" leaves the wheel alone: letting go of the wheel.");
+                            break;
+                        }
                         // A different controller type needs a new virtual pad: reconnect (the game sees it replugged).
                         if (PadKinds.Of(fresh) != padKind || fresh.Outputs.SecondPad != (pad2 is not null))
                         {
@@ -645,7 +679,7 @@ public sealed class MapperService : IDisposable
             _testLogged = false;
         }
 
-        bool haveAngle = TryAngle(raw, device, out double angle, out double half);
+        bool haveAngle = TryAngle(raw, device, out double angle, out double half, out double rawDegrees);
 
         // Once a second, send the spring and friction again (see WheelForce.Resend), so a wheel that was reset behind our back gets them back.
         if (nowMs - _lastResend >= 1000) { _lastResend = nowMs; f.Resend(); }
@@ -671,7 +705,7 @@ public sealed class MapperService : IDisposable
         }
         if (_probe is { } probe)
         {
-            double push = probe.Step(angle, nowMs, haveAngle);
+            double push = probe.Step(rawDegrees, nowMs, haveAngle);   // raw position: the auto-centre must not look like the wheel moving
             f.SetSpring(0); f.SetFriction(0); f.SetRumble(0, 0, 0);
             f.SetCurveForce(CentringCurve.ToDevice(push, false), nowMs);
             if (probe.Done)

@@ -78,6 +78,8 @@ public sealed class AppSettings
     public string MiniView { get; set; } = "Full";
     /// <summary>Look for a new version by itself, quietly, a little after start-up and about once a day. On by default; one tick in Settings turns it off.</summary>
     public bool AutoUpdateCheck { get; set; } = true;
+    /// <summary>When a new version is found, download and install it by itself (it takes effect the next time the app starts, or when asked to restart). On by default.</summary>
+    public bool AutoInstallUpdates { get; set; } = true;
     /// <summary>When the last automatic check reached GitHub (UTC, ISO text), so it runs about once a day and not on every start.</summary>
     public string LastUpdateCheckUtc { get; set; } = "";
     /// <summary>The version the user told Home to stop showing ("Later"); a newer one shows again.</summary>
@@ -108,6 +110,9 @@ public sealed class AppSettings
     /// <summary>Games with anti-cheat, shared by every copy of the app: keyboard output is never allowed for them.</summary>
     /// <summary>Earlier versions of every profile, one folder per profile.</summary>
     public static string HistoryDir => Path.Combine(AppDataDir, "history");
+    /// <summary>Where a downloaded update waits (the unpacked program and a note of its version) until it is swapped in.</summary>
+    public static string UpdateDir => Path.Combine(AppDataDir, "update");
+    public static string StagedDir => Path.Combine(UpdateDir, "staged");
 
     public static string AntiCheatPath => Path.Combine(AppDataDir, "anticheat.txt");
 

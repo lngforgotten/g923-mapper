@@ -62,21 +62,27 @@ public partial class SettingsWindow : Window
         StyleBox.SelectedIndex = ForceMath.NormaliseStyle(f.Style) == ForceMath.StyleSharp ? 1 : ForceMath.NormaliseStyle(f.Style) == ForceMath.StyleRough ? 2 : 0;
         MotorsBox.ItemsSource = new[] { "Both (heavy and light)", "Heavy only", "Light only" };
         MotorsBox.SelectedIndex = f.Motors == ForceMath.MotorsHeavy ? 1 : f.Motors == ForceMath.MotorsLight ? 2 : 0;
+        CentringStyleBox.ItemsSource = new[] { "Straight spring", "Curve (like a car)" };
+        CentringPresetBox.ItemsSource = new[] { "Custom" }.Concat(CentringCurve.Presets.Select(p => p.Name)).ToList();
+        ShowCurveSettings(f);
         UpdateForceTexts();
 
         UpdateRepoBox.Text = _s.Settings.UpdateRepo;
         AutoUpdateBox.IsChecked = _s.Settings.AutoUpdateCheck;
+        AutoInstallBox.IsChecked = _s.Settings.AutoInstallUpdates;
         AboutText.Text = $"G923 Mapper {typeof(SettingsWindow).Assembly.GetName().Version?.ToString(3) ?? ""}  ·  {RuntimeInformation.FrameworkDescription}";
 
         _loading = false;
         RefreshAll();
 
+        _s.Service.FloorMeasured += OnFloorMeasured;
         _statusTimer.Tick += (_, _) => RefreshLive();
         _statusTimer.Start();
         _saveTimer.Tick += (_, _) => { _saveTimer.Stop(); _s.Settings.Save(); };
         Closed += (_, _) =>
         {
             _statusTimer.Stop();
+            _s.Service.FloorMeasured -= OnFloorMeasured;
             if (_saveTimer.IsEnabled) { _saveTimer.Stop(); _s.Settings.Save(); }
         };
     }
@@ -104,6 +110,7 @@ public partial class SettingsWindow : Window
             : svc.ForceMessage.Length > 0 ? svc.ForceMessage
             : "Not active";
         TestForceButton.IsEnabled = svc.ForceActive;
+        RefreshCurve();
     }
 
     // ---------------------------------------------------------------- appearance and general
@@ -289,6 +296,22 @@ public partial class SettingsWindow : Window
         _s.Settings.Save();
     }
 
+    private void AutoInstall_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _s.Settings.AutoInstallUpdates = AutoInstallBox.IsChecked == true;
+        _s.Settings.Save();
+    }
+
+    private async void InstallUpdate_Click(object sender, RoutedEventArgs e)
+    {
+        UpdateInstallButton.IsEnabled = false;
+        UpdateMessage.Text = "Downloading the new version...";
+        if (_s.InstallUpdateNow is { } install) await install();
+        UpdateInstallButton.IsEnabled = true;
+        UpdateMessage.Text = _s.UpdatePhase == UpdatePhase.Failed ? "It could not be installed: " + _s.UpdateProblem : "";
+    }
+
     private void UpdateRepo_Changed(object sender, TextChangedEventArgs e)
     {
         if (_loading) return;
@@ -308,8 +331,14 @@ public partial class SettingsWindow : Window
             if (info is null) { UpdateMessage.Text = problem ?? ""; return; }
             UpdateMessage.Text = info.Message;
             _updateUrl = info.Url;
-            UpdateOpenButton.Visibility = info.Newer ? Visibility.Visible : Visibility.Collapsed;
+            UpdateOpenButton.Visibility = UpdateInstallButton.Visibility = info.Newer ? Visibility.Visible : Visibility.Collapsed;
             AppLog.Info("Update check: " + info.Message);
+            if (info.Newer)
+            {
+                _s.AvailableUpdate = info;                                    // Home shows it too, and Install now works from either place
+                if (_s.UpdatePhase is UpdatePhase.None or UpdatePhase.Failed) _s.UpdatePhase = UpdatePhase.Available;
+                _s.UpdateChanged?.Invoke();
+            }
         }
         finally { UpdateButton.IsEnabled = true; }
     }
@@ -381,6 +410,11 @@ public partial class SettingsWindow : Window
         RumbleText.Text = $"{(int)RumbleSlider.Value}%";
         SpringText.Text = $"{(int)SpringSlider.Value}%";
         FrictionText.Text = $"{(int)FrictionSlider.Value}%";
+        CentreText.Text = $"{(int)CentreSlider.Value}°";
+        PeakText.Text = $"{(int)PeakSlider.Value}°";
+        LightenText.Text = $"{(int)LightenSlider.Value}%";
+        DampText.Text = $"{(int)DampSlider.Value}%";
+        FloorText.Text = $"{(int)FloorSlider.Value}%";
     }
 
     private void Ffb_Changed(object sender, RoutedEventArgs e) => PushForce();
@@ -399,6 +433,14 @@ public partial class SettingsWindow : Window
         if (_loading) return;
         var f = new ForceSettings
         {
+            CentringReversed = _s.Settings.Force.CentringReversed,
+            CentringWheel = _s.Settings.Force.CentringWheel,
+            CentringStyle = CentringStyleBox.SelectedIndex == 1 ? CentringCurve.StyleCurve : CentringCurve.StyleSpring,
+            CentreDegrees = (int)CentreSlider.Value,
+            PeakDegrees = (int)PeakSlider.Value,
+            LighteningPercent = (int)LightenSlider.Value,
+            DampingPercent = (int)DampSlider.Value,
+            FloorPercent = (int)FloorSlider.Value,
             Enabled = FfbBox.IsChecked == true,
             RumblePercent = (int)RumbleSlider.Value,
             SpringPercent = (int)SpringSlider.Value,
@@ -414,6 +456,102 @@ public partial class SettingsWindow : Window
     }
 
     private void TestForce_Click(object sender, RoutedEventArgs e) => _s.Service.TestForce();
+
+    // ---------------------------------------------------------------- the centring curve
+
+    /// <summary>Put the curve settings into the controls without that counting as the user changing them.</summary>
+    private void ShowCurveSettings(ForceSettings f)
+    {
+        bool was = _loading;
+        _loading = true;
+        CentringStyleBox.SelectedIndex = CentringCurve.NormaliseStyle(f.CentringStyle) == CentringCurve.StyleCurve ? 1 : 0;
+        CentreSlider.Value = Math.Clamp(f.CentreDegrees, CentreSlider.Minimum, CentreSlider.Maximum);
+        PeakSlider.Value = Math.Clamp(f.PeakDegrees, PeakSlider.Minimum, PeakSlider.Maximum);
+        LightenSlider.Value = Math.Clamp(f.LighteningPercent, 0, 100);
+        DampSlider.Value = Math.Clamp(f.DampingPercent, 0, 100);
+        FloorSlider.Value = Math.Clamp(f.FloorPercent, 0, FloorSlider.Maximum);
+        SpringSlider.Value = Math.Clamp(f.SpringPercent, 0, 100);
+        CentringPresetBox.SelectedIndex = CentringCurve.Presets.ToList().FindIndex(p => p.Matches(f)) + 1;   // 0 = Custom
+        CurvePanel.Visibility = CentringStyleBox.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+        _loading = was;
+    }
+
+    private void CentringStyle_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading) return;
+        CurvePanel.Visibility = CentringStyleBox.SelectedIndex == 1 ? Visibility.Visible : Visibility.Collapsed;
+        PushForce();
+    }
+
+    private void CentringPreset_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || CentringPresetBox.SelectedIndex <= 0) return;
+        var f = _s.Settings.Force.Clone();
+        CentringCurve.Presets[CentringPresetBox.SelectedIndex - 1].ApplyTo(f);
+        f.CentringStyle = CentringCurve.StyleCurve;
+        ShowCurveSettings(f);
+        UpdateForceTexts();
+        PushForce();
+    }
+
+    private void Measure_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_s.Service.ForceActive)
+        {
+            MeasureStatus.Text = "Force feedback is not running, so the wheel cannot be measured. Start the mapper first.";
+            return;
+        }
+        MeasureStatus.Text = "Measuring: keep your hands off the wheel...";
+        _showingResult = false;
+        MeasureButton.IsEnabled = false;
+        _s.Service.MeasureFloor();
+    }
+
+    /// <summary>The measurement ended (on the service thread): keep what it found and say so.</summary>
+    private void OnFloorMeasured(FloorMeasurement m) => Dispatcher.BeginInvoke(() =>
+    {
+        MeasureButton.IsEnabled = true;
+        MeasureStatus.Text = m.Message;
+        _showingResult = true;
+        if (!m.Ok) return;
+        var f = _s.Settings.Force.Clone();
+        f.FloorPercent = Math.Clamp(m.FloorPercent, 0, (int)FloorSlider.Maximum);
+        f.CentringReversed = m.Reversed;
+        f.CentringWheel = m.Wheel;
+        _s.Settings.Force = f;
+        _s.Service.Force = f.Clone();
+        ShowCurveSettings(f);
+        UpdateForceTexts();
+        _saveTimer.Stop();
+        _saveTimer.Start();
+    });
+
+    private bool _showingResult;
+
+    /// <summary>The live part of the curve section: the graph and what it says about this wheel.</summary>
+    private void RefreshCurve()
+    {
+        if (CurvePanel.Visibility != Visibility.Visible) return;
+        var svc = _s.Service;
+        ForceSettings f = _s.Settings.Force;
+        double half = (svc.Latest?.Device.RotationDegrees ?? 900) / 2;
+        CurveGraph.Set(f, half);
+
+        double? angle = null;
+        if (svc.Latest is { } snap && snap.Raw.Live && snap.Device.Axes.TryGetValue("wheel", out var wa) && wa.SourceIndex >= 0 && wa.Max > wa.Min)
+            angle = (snap.Raw.Axes[wa.SourceIndex] - wa.Centre) * snap.Device.RotationDegrees / (wa.Max - wa.Min);
+        CurveGraph.SetLive(angle);
+        CurveCaption.Text = CurveGraph.Caption ?? "The graph shows the pull at each angle. Start the mapper to see where the wheel is.";
+
+        if (svc.Measuring) { MeasureButton.IsEnabled = false; _showingResult = false; return; }
+        MeasureButton.IsEnabled = svc.ForceActive && svc.CurveSupported;
+        if (_showingResult) return;
+        bool measured = svc.WheelIds.Length > 0 && f.CentringWheel == svc.WheelIds;
+        MeasureStatus.Text = svc.State != MapperState.Running ? "Start the mapper with the wheel plugged in to measure it."
+            : !svc.CurveSupported ? "This wheel does not accept the force the curve needs, so the plain spring is used."
+            : measured ? "The curve is running: this wheel has been measured."
+            : "The curve is not running yet. Take your hands off the wheel and press Measure wheel; until then the plain spring is used.";
+    }
 
     // ---------------------------------------------------------------- hide the wheel
 

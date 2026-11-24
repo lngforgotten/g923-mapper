@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace G923Mapper;
 
 /// <summary>The outcome of asking a GitHub repository whether there is a newer release.</summary>
-public sealed record UpdateInfo(bool Newer, string LatestTag, string Url, string Message);
+public sealed record UpdateInfo(bool Newer, string LatestTag, string Url, string Message, IReadOnlyList<UpdateAsset>? Assets = null);
 
 /// <summary>
 /// The pure half of "check for updates": turning what the user typed into a repository, reading GitHub's "latest release" answer, and comparing
@@ -69,7 +69,7 @@ public static partial class UpdateCheck
             if (latest is null)
                 return new UpdateInfo(false, tag, url, tag.Length == 0 ? "That repository has no releases yet." : $"The latest release (\"{tag}\") has no version number I can compare.");
             return IsNewer(current, latest)
-                ? new UpdateInfo(true, tag, url, $"A newer version is available: {tag} (you have {current.ToString(3)}).")
+                ? new UpdateInfo(true, tag, url, $"A newer version is available: {tag} (you have {current.ToString(3)}).", UpdatePackage.ReadAssets(json))
                 : new UpdateInfo(false, tag, url, $"You are up to date ({current.ToString(3)}; the latest release is {tag}).");
         }
         catch (JsonException)
