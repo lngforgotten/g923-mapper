@@ -84,6 +84,6 @@ public sealed class RemapBuilder
             if (!_from.TryGetValue(step.Id, out string? from)) continue;
             rules.Add(RuleFactory.Make(_device, from, step.Target));
         }
-        return new Profile { Name = name.Trim(), Device = DeviceRegistry.AutoDevice, Safety = ProfileSafety.Strict, Rules = rules };
+        return new Profile { Name = name.Trim(), Device = DeviceRegistry.AutoDevice, Safety = ProfileSafety.Strict, Outputs = new ProfileOutputs { Pad = PadKinds.AutoText }, Rules = rules };
     }
 }

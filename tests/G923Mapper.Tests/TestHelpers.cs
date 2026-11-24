@@ -1,5 +1,7 @@
 using G923Mapper;
 
+[assembly: Xunit.CollectionBehavior(DisableTestParallelization = true)]   // a few tests set PadKinds.AutoKind, which is shared
+
 namespace G923Mapper.Tests;
 
 internal static class T

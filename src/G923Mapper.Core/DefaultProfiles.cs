@@ -9,7 +9,7 @@ public static class DefaultProfiles
           "name": "default",
           "device": "auto",
           "safety": "strict",
-          "outputs": { "keyboard": false },
+          "outputs": { "keyboard": false, "pad": "auto" },
           "rules": [
             { "from": "wheel",    "to": "LeftStickX",   "curve": "linear" },
             { "from": "throttle", "to": "RightTrigger", "curve": "linear" },
@@ -36,7 +36,7 @@ public static class DefaultProfiles
           "match": { "exe": ["GTA5.exe", "GTA5_Enhanced.exe"] },
           "device": "auto",
           "safety": "strict",
-          "outputs": { "keyboard": false },
+          "outputs": { "keyboard": false, "pad": "auto" },
           "rules": [
             { "from": "wheel",    "to": "LeftStickX",        "curve": "linear", "deadzone": 0.04, "antiDeadzone": 0.06, "range": 540 },
             { "from": "throttle", "to": "RightTrigger",      "curve": "linear", "invert": false },

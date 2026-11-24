@@ -128,8 +128,8 @@ public partial class RuleEditorWindow : Window
         FeelFriction.Value = copy.Force?.Friction ?? 0;
         FeelMotors.SelectedIndex = string.Equals(copy.Force?.Motors, ForceMath.MotorsHeavy, StringComparison.OrdinalIgnoreCase) ? 1
             : string.Equals(copy.Force?.Motors, ForceMath.MotorsLight, StringComparison.OrdinalIgnoreCase) ? 2 : 0;
-        PadBox.ItemsSource = new[] { "Xbox 360", "DualShock 4" };
-        PadBox.SelectedItem = PadKinds.Of(copy) == PadKind.DualShock4 ? "DualShock 4" : "Xbox 360";
+        PadBox.ItemsSource = PadChoices;
+        PadBox.SelectedItem = PadChoiceOf(copy);
         SecondPadBox.IsChecked = copy.Outputs.SecondPad;
         SafetyBox.ItemsSource = new[] { "Strict", "Standard" };
         SafetyBox.SelectedItem = ProfileSafety.Effective(copy) == ProfileSafety.Standard ? "Standard" : "Strict";
@@ -208,6 +208,11 @@ public partial class RuleEditorWindow : Window
     }
 
     /// <summary>Everything the "To output" box offers; the P2: ones (the second virtual controller) only when that is switched on.</summary>
+    private const string PadMatch = "Match the wheel";
+    private static readonly string[] PadChoices = [PadMatch, "Xbox 360", "DualShock 4"];
+
+    private static string PadChoiceOf(Profile p) => PadKinds.Normalise(p) switch { PadKinds.AutoText => PadMatch, PadKinds.DualShock4Text => "DualShock 4", _ => "Xbox 360" };
+
     private IEnumerable<string> ModeNames => _modes.Select(m => m.Name);
 
     private static List<string> ToChoices(bool secondPad, IEnumerable<string>? modeNames = null)
@@ -512,7 +517,9 @@ public partial class RuleEditorWindow : Window
         SafetyHint.Text = blocked is not null ? $"{blocked} is on the anti-cheat list, so this profile can only use the plain virtual controller."
             : IsStandard ? "Standard: extras are allowed. Do not use this for games with online play or anti-cheat."
             : "Strict: controller mapping only, the safe choice for online games and anti-cheat.";
-        PadHint.Text = PadBox.SelectedItem as string == "DualShock 4"
+        PadHint.Text = PadBox.SelectedItem as string == PadMatch
+            ? $"Follows the wheel: a PlayStation edition wheel gets a DualShock 4, any other wheel an Xbox 360 controller. Right now that is {(PadKinds.AutoKind == PadKind.DualShock4 ? "a DualShock 4" : "an Xbox 360 controller")}."
+            : PadBox.SelectedItem as string == "DualShock 4"
             ? "Rules keep the Xbox names: A = Cross, B = Circle, X = Square, Y = Triangle, shoulders = L1/R1, triggers = L2/R2, Back = Share, Start = Options, Guide = PS button."
             : "Works with nearly every PC game.";
         UpdateFeelUi();
@@ -585,7 +592,7 @@ public partial class RuleEditorWindow : Window
         Outputs = new ProfileOutputs
         {
             Keyboard = KeyboardBox.IsChecked == true, Turbo = _rows.Concat(_modes.SelectMany(m => m.Rows)).Any(r => r.Rule.Turbo),
-            Pad = PadBox.SelectedItem as string == "DualShock 4" ? PadKinds.DualShock4Text : null,
+            Pad = PadBox.SelectedItem as string == PadMatch ? PadKinds.AutoText : PadBox.SelectedItem as string == "DualShock 4" ? PadKinds.DualShock4Text : null,
             SecondPad = SecondPadBox.IsChecked == true,
         },
         Rules = _rows.Select(r => r.Rule).ToList(),
@@ -818,7 +825,7 @@ public partial class RuleEditorWindow : Window
         FeelFriction.Value = p.Force?.Friction ?? 0;
         FeelMotors.SelectedIndex = string.Equals(p.Force?.Motors, ForceMath.MotorsHeavy, StringComparison.OrdinalIgnoreCase) ? 1
             : string.Equals(p.Force?.Motors, ForceMath.MotorsLight, StringComparison.OrdinalIgnoreCase) ? 2 : 0;
-        PadBox.SelectedItem = PadKinds.Of(p) == PadKind.DualShock4 ? "DualShock 4" : "Xbox 360";
+        PadBox.SelectedItem = PadChoiceOf(p);
         SecondPadBox.IsChecked = p.Outputs.SecondPad;
         ToBox.ItemsSource = ToChoices(p.Outputs.SecondPad, ModeNames);
         SafetyBox.SelectedItem = ProfileSafety.Effective(p) == ProfileSafety.Standard ? "Standard" : "Strict";

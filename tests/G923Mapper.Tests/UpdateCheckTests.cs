@@ -82,3 +82,32 @@ public class UpdateCheckTests
     public void The_api_address_is_the_latest_release_of_the_repository() =>
         Assert.Equal("https://api.github.com/repos/o/n/releases/latest", UpdateCheck.ApiUrl("o/n"));
 }
+
+public class UpdateDueTests
+{
+    private static readonly TimeSpan Gap = TimeSpan.FromHours(20);
+    private static readonly DateTime Now = new(2026, 11, 24, 12, 0, 0, DateTimeKind.Utc);
+
+    [Fact]
+    public void Never_looked_or_an_unreadable_time_means_it_is_due()
+    {
+        Assert.True(UpdateCheck.Due(null, Now, Gap));
+        Assert.True(UpdateCheck.Due("", Now, Gap));
+        Assert.True(UpdateCheck.Due("not a time", Now, Gap));
+    }
+
+    [Fact]
+    public void It_is_due_again_only_after_the_gap()
+    {
+        Assert.False(UpdateCheck.Due(Now.AddHours(-1).ToString("o"), Now, Gap));
+        Assert.False(UpdateCheck.Due(Now.AddHours(-19).ToString("o"), Now, Gap));
+        Assert.True(UpdateCheck.Due(Now.AddHours(-20).ToString("o"), Now, Gap));
+        Assert.True(UpdateCheck.Due(Now.AddDays(-3).ToString("o"), Now, Gap));
+    }
+
+    [Fact]
+    public void A_last_look_in_the_future_after_a_clock_change_does_not_stop_it_looking()
+    {
+        Assert.True(UpdateCheck.Due(Now.AddDays(2).ToString("o"), Now, Gap));
+    }
+}

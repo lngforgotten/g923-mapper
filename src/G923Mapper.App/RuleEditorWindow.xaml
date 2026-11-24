@@ -62,8 +62,8 @@
                 </StackPanel>
                 <StackPanel Grid.Row="2" Grid.ColumnSpan="6" Orientation="Horizontal" Margin="0,10,0,0">
                     <TextBlock Text="Controller" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
-                    <ComboBox x:Name="PadBox" Width="150" SelectionChanged="Profile_Changed" VerticalAlignment="Center"
-                              ToolTip="What the game sees. Xbox 360 works with nearly every PC game; DualShock 4 is for games that show PlayStation prompts." />
+                    <ComboBox x:Name="PadBox" Width="170" SelectionChanged="Profile_Changed" VerticalAlignment="Center"
+                              ToolTip="What the game sees. Match the wheel gives a PlayStation edition wheel a DualShock 4 and any other wheel an Xbox 360 controller. Xbox 360 works with nearly every PC game; DualShock 4 is for games that show PlayStation prompts." />
                     <CheckBox x:Name="SecondPadBox" Content="Second controller" Margin="14,0,0,0" VerticalAlignment="Center" Checked="SecondPad_Changed" Unchecked="SecondPad_Changed"
                               ToolTip="Also show the game a second virtual controller. Rules whose output starts with P2: (listed once this is ticked) feed it, for example the pedals on their own controller." />
                     <TextBlock x:Name="PadHint" Style="{StaticResource Hint}" Margin="14,0,0,0" VerticalAlignment="Center" />

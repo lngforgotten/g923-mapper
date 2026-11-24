@@ -65,6 +65,7 @@ public partial class SettingsWindow : Window
         UpdateForceTexts();
 
         UpdateRepoBox.Text = _s.Settings.UpdateRepo;
+        AutoUpdateBox.IsChecked = _s.Settings.AutoUpdateCheck;
         AboutText.Text = $"G923 Mapper {typeof(SettingsWindow).Assembly.GetName().Version?.ToString(3) ?? ""}  ·  {RuntimeInformation.FrameworkDescription}";
 
         _loading = false;
@@ -281,6 +282,13 @@ public partial class SettingsWindow : Window
     private static readonly System.Net.Http.HttpClient Http = new() { Timeout = TimeSpan.FromSeconds(8) };
     private string _updateUrl = "";
 
+    private void AutoUpdate_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _s.Settings.AutoUpdateCheck = AutoUpdateBox.IsChecked == true;
+        _s.Settings.Save();
+    }
+
     private void UpdateRepo_Changed(object sender, TextChangedEventArgs e)
     {
         if (_loading) return;
@@ -291,39 +299,17 @@ public partial class SettingsWindow : Window
 
     private async void CheckUpdate_Click(object sender, RoutedEventArgs e)
     {
-        string? repo = UpdateCheck.NormaliseRepo(UpdateRepoBox.Text);
         UpdateOpenButton.Visibility = Visibility.Collapsed;
-        if (repo is null)
-        {
-            UpdateMessage.Text = "Enter a GitHub repository as owner/name (or its github.com address) first.";
-            return;
-        }
-
         UpdateButton.IsEnabled = false;
         UpdateMessage.Text = "Asking GitHub...";
         try
         {
-            using var request = new System.Net.Http.HttpRequestMessage(System.Net.Http.HttpMethod.Get, UpdateCheck.ApiUrl(repo));
-            request.Headers.UserAgent.ParseAdd("G923Mapper");           // a generic name: nothing about you or this PC
-            request.Headers.Accept.ParseAdd("application/vnd.github+json");
-            using var response = await Http.SendAsync(request);
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-                UpdateMessage.Text = "GitHub has no such repository, or it has no releases yet.";
-                return;
-            }
-            response.EnsureSuccessStatusCode();
-            string json = await response.Content.ReadAsStringAsync();
-            Version current = typeof(SettingsWindow).Assembly.GetName().Version ?? new Version(1, 0, 0);
-            var info = UpdateCheck.Interpret(json, current, repo);
+            var (info, problem) = await UpdateChecker.CheckAsync(UpdateRepoBox.Text);
+            if (info is null) { UpdateMessage.Text = problem ?? ""; return; }
             UpdateMessage.Text = info.Message;
             _updateUrl = info.Url;
             UpdateOpenButton.Visibility = info.Newer ? Visibility.Visible : Visibility.Collapsed;
             AppLog.Info("Update check: " + info.Message);
-        }
-        catch (Exception ex) when (ex is System.Net.Http.HttpRequestException or TaskCanceledException)
-        {
-            UpdateMessage.Text = "Could not reach GitHub (" + (ex is TaskCanceledException ? "no answer in time" : ex.Message) + ").";
         }
         finally { UpdateButton.IsEnabled = true; }
     }

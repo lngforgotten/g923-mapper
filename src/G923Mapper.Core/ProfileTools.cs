@@ -251,7 +251,7 @@ public static class ProfileWriter
             sb.AppendLine($"  \"match\": {{ \"exe\": [{string.Join(", ", p.Match.Exe.Select(Str))}] }},");
         sb.AppendLine($"  \"device\": {Str(p.Device)},");
         sb.AppendLine($"  \"safety\": {Str(ProfileSafety.Effective(p))},");
-        sb.AppendLine($"  \"outputs\": {{ \"keyboard\": {(p.Outputs.Keyboard ? "true" : "false")}{(p.Outputs.Turbo ? ", \"turbo\": true" : "")}{(PadKinds.Of(p) == PadKind.DualShock4 ? ", \"pad\": \"ds4\"" : "")}{(p.Outputs.SecondPad ? ", \"secondPad\": true" : "")} }},");
+        sb.AppendLine($"  \"outputs\": {{ \"keyboard\": {(p.Outputs.Keyboard ? "true" : "false")}{(p.Outputs.Turbo ? ", \"turbo\": true" : "")}{(PadKinds.IsAuto(p.Outputs.Pad) ? ", \"pad\": \"auto\"" : PadKinds.Of(p) == PadKind.DualShock4 ? ", \"pad\": \"ds4\"" : "")}{(p.Outputs.SecondPad ? ", \"secondPad\": true" : "")} }},");
         if (p.HideWheel is bool hideWheel) sb.AppendLine($"  \"hideWheel\": {(hideWheel ? "true" : "false")},");
         if (p.Force is { IsEmpty: false } force)
         {

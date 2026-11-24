@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace G923Mapper;
@@ -191,7 +191,15 @@ public sealed class DeviceRegistry
     public DeviceMap? Resolve(string? name, (int Vid, int Pid)? wheel)
     {
         if (IsAuto(name))
-            return (wheel is { } w ? FindByUsb(w.Vid, w.Pid) : null) ?? Fallback;
+        {
+            if (wheel is { } w)
+            {
+                if (FindByUsb(w.Vid, w.Pid) is { } exact) return exact;
+                // A PlayStation edition wheel nobody has calibrated yet is much closer to the built-in PlayStation layout than to the Xbox one.
+                if (WheelEditions.Of(w.Vid, w.Pid) == WheelEdition.PlayStation && _devices.TryGetValue("g923_ps", out var ps)) return ps;
+            }
+            return Fallback;
+        }
         return name is not null && _devices.TryGetValue(name.Trim(), out var map) ? map : null;
     }
 
@@ -236,6 +244,7 @@ public sealed class DeviceRegistry
     {
         var reg = new DeviceRegistry();
         reg.Add(G923Xbox());
+        reg.Add(G923PlayStation());
         return reg;
     }
 
@@ -262,6 +271,31 @@ public sealed class DeviceRegistry
         // Observed: buttons 5 and 6 are the paddles (which is which is unconfirmed on the hardware).
         Buttons = new(StringComparer.OrdinalIgnoreCase) { ["paddleL"] = 5, ["paddleR"] = 6 },
     };
+
+    /// <summary>
+    /// The PlayStation edition (046D:C266), from a real wheel's calibration. The face buttons and the two paddles and the Share and Options buttons
+    /// are named the PlayStation way (the Xbox-style names used by calibration are kept as well, so older profiles still work). The other wheel
+    /// buttons (L2, R2, L3, R3, PS) are not named here yet: they are always there as button7 and so on, and Calibrate names them.
+    /// </summary>
+    public static DeviceMap G923PlayStation() => PlayStationNames.Apply(new DeviceMap
+    {
+        Name = "g923_ps",
+        Vid = "046D",
+        Pid = "C266",
+        RotationDegrees = 900,
+        Axes = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["wheel"] = new AxisDef { Source = "X", Signed = true, Centre = 32660 },
+            ["throttle"] = new AxisDef { Source = "Y", Invert = true },
+            ["brake"] = new AxisDef { Source = "RZ", Invert = true },
+            ["clutch"] = new AxisDef { Source = "Slider0", Invert = true },
+        },
+        // As calibrated on a real wheel: 1 bottom face button, 2 left, 3 right, 4 top, 5 and 6 the paddles, 9 and 10 the small buttons in the middle.
+        Buttons = new(StringComparer.OrdinalIgnoreCase)
+        {
+            ["paddleL"] = 6, ["paddleR"] = 5, ["buttonA"] = 1, ["buttonB"] = 3, ["buttonX"] = 2, ["buttonY"] = 4, ["view"] = 9, ["menu"] = 10,
+        },
+    });
 
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
@@ -326,6 +360,7 @@ public sealed class DeviceRegistry
             map.Name = name;
             map.Axes = new(map.Axes, StringComparer.OrdinalIgnoreCase);
             map.Buttons = new(map.Buttons, StringComparer.OrdinalIgnoreCase);
+            if (!map.Extra && WheelEditions.Of(map) == WheelEdition.PlayStation) PlayStationNames.Apply(map);   // a calibration made with Xbox-style names also gets the PlayStation ones
             Add(map);
         }
     }

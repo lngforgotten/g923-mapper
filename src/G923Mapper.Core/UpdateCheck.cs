@@ -33,6 +33,13 @@ public static partial class UpdateCheck
 
     public static string ApiUrl(string repo) => $"https://api.github.com/repos/{repo}/releases/latest";
 
+    /// <summary>
+    /// Whether it is time to look again: never looked, or the last look was at least <paramref name="gap"/> ago. A "last look" that cannot be read, or
+    /// that is in the future (the clock was changed), counts as never.
+    /// </summary>
+    public static bool Due(string? lastUtc, DateTime nowUtc, TimeSpan gap) =>
+        !DateTime.TryParse(lastUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out DateTime last) || last > nowUtc || nowUtc - last >= gap;
+
     /// <summary>The first version number in a release tag such as "v1.2.3" or "release-2.0", or null.</summary>
     public static Version? ParseVersion(string? tag)
     {

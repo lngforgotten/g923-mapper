@@ -13,12 +13,29 @@ public static class PadKinds
 {
     public const string Xbox360Text = "xbox360";
     public const string DualShock4Text = "ds4";
+    /// <summary>The profile value that means "whichever controller suits the wheel that is connected": a DualShock 4 for a PlayStation edition wheel, an Xbox 360 controller otherwise.</summary>
+    public const string AutoText = "auto";
 
-    /// <summary>"xbox360", "ds4" (also "dualshock4", "ps4", "playstation"), case-insensitive. Empty or null means the default, Xbox 360.</summary>
+    private static int _autoKind = (int)PadKind.Xbox360;
+
+    /// <summary>What "auto" means right now. Set when a wheel connects (see <see cref="SetFor"/>); an Xbox 360 controller until then.</summary>
+    public static PadKind AutoKind { get => (PadKind)Volatile.Read(ref _autoKind); set => Volatile.Write(ref _autoKind, (int)value); }
+
+    public static bool IsAuto(string? text) =>
+        text?.Trim().ToLowerInvariant() is "auto" or "match" or "wheel";
+
+    /// <summary>Make "auto" follow the wheel: a PlayStation edition wheel gets a DualShock 4, anything else an Xbox 360 controller.</summary>
+    public static void SetFor(WheelEdition edition) => AutoKind = edition == WheelEdition.PlayStation ? PadKind.DualShock4 : PadKind.Xbox360;
+
+    /// <summary>The profile's choice as text for a file: "auto", "ds4" or "xbox360".</summary>
+    public static string Normalise(Profile p) => IsAuto(p.Outputs.Pad) ? AutoText : Of(p) == PadKind.DualShock4 ? DualShock4Text : Xbox360Text;
+
+    /// <summary>"xbox360", "ds4" (also "dualshock4", "ps4", "playstation") or "auto" (match the wheel), case-insensitive. Empty or null means the default, Xbox 360.</summary>
     public static bool TryParse(string? text, out PadKind kind)
     {
         kind = PadKind.Xbox360;
         if (string.IsNullOrWhiteSpace(text)) return true;
+        if (IsAuto(text)) { kind = AutoKind; return true; }
         switch (text.Trim().ToLowerInvariant())
         {
             case "xbox360" or "xbox" or "x360": kind = PadKind.Xbox360; return true;

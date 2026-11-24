@@ -16,7 +16,7 @@ public static class StarterTemplates
               "isTemplate": true,
               "device": "auto",
               "safety": "strict",
-              "outputs": { "keyboard": false },
+              "outputs": { "keyboard": false, "pad": "auto" },
               "rules": [
                 { "from": "wheel", "to": "LeftStickX", "curve": "linear", "deadzone": 0.04 },
                 { "from": "throttle", "to": "RightTrigger", "curve": "linear" },
@@ -33,7 +33,7 @@ public static class StarterTemplates
               "isTemplate": true,
               "device": "auto",
               "safety": "standard",
-              "outputs": { "keyboard": true },
+              "outputs": { "keyboard": true, "pad": "auto" },
               "rules": [
                 { "from": "clutch", "to": "Key:Q", "curve": "linear", "threshold": 0.35 },
                 { "from": "throttle", "to": "Key:E", "curve": "linear", "threshold": 0.5 },
@@ -48,7 +48,7 @@ public static class StarterTemplates
               "isTemplate": true,
               "device": "auto",
               "safety": "standard",
-              "outputs": { "keyboard": true },
+              "outputs": { "keyboard": true, "pad": "auto" },
               "rules": [
                 { "from": "clutch", "to": "Mouse:Right", "curve": "linear", "threshold": 0.4 },
                 { "from": "throttle", "to": "Key:Shift", "curve": "linear", "threshold": 0.55 },
@@ -63,7 +63,7 @@ public static class StarterTemplates
               "isTemplate": true,
               "device": "auto",
               "safety": "strict",
-              "outputs": { "keyboard": false },
+              "outputs": { "keyboard": false, "pad": "auto" },
               "rules": [
                 { "from": "wheel", "to": "LeftStickX", "curve": "expo", "exponent": 1.6, "deadzone": 0.03 },
                 { "from": "throttle", "to": "RightStickY", "curve": "linear", "deadzone": 0.03 },

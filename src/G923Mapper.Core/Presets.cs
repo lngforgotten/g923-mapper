@@ -36,7 +36,7 @@ public static class Presets
               "name": "Racing",
               "device": "auto",
               "safety": "strict",
-              "outputs": { "keyboard": false },
+              "outputs": { "keyboard": false, "pad": "auto" },
               "rules": [
                 { "from": "wheel",    "to": "LeftStickX",   "curve": "linear", "deadzone": 0.02 },
                 { "from": "throttle", "to": "RightTrigger", "curve": "linear" },
@@ -56,7 +56,7 @@ public static class Presets
               "name": "Soft steering",
               "device": "auto",
               "safety": "strict",
-              "outputs": { "keyboard": false },
+              "outputs": { "keyboard": false, "pad": "auto" },
               "rules": [
                 { "from": "wheel",    "to": "LeftStickX",   "curve": "expo", "exponent": 1.6, "deadzone": 0.03 },
                 { "from": "throttle", "to": "RightTrigger", "curve": "linear" },
@@ -75,7 +75,7 @@ public static class Presets
               "name": "Pedals as buttons",
               "device": "auto",
               "safety": "strict",
-              "outputs": { "keyboard": false },
+              "outputs": { "keyboard": false, "pad": "auto" },
               "rules": [
                 { "from": "wheel",    "to": "LeftStickX", "curve": "linear", "deadzone": 0.03 },
                 { "from": "throttle", "to": "Button:A", "threshold": 0.5 },
@@ -95,7 +95,7 @@ public static class Presets
               "name": "Menus",
               "device": "auto",
               "safety": "strict",
-              "outputs": { "keyboard": false },
+              "outputs": { "keyboard": false, "pad": "auto" },
               "rules": [
                 { "from": "wheel",    "to": "Button:DPadLeft",  "threshold": -0.5 },
                 { "from": "wheel",    "to": "Button:DPadRight", "threshold": 0.5 },
@@ -125,7 +125,7 @@ public static class Presets
               "match": { "exe": ["WardogsClient-Win64-Shipping.exe"] },
               "device": "auto",
               "safety": "standard",
-              "outputs": { "keyboard": true },
+              "outputs": { "keyboard": true, "pad": "auto" },
               "rules": [
                 { "from": "clutch",   "to": "Key:Q", "threshold": 0.35 },
                 { "from": "throttle", "to": "Key:E", "threshold": 0.35 }

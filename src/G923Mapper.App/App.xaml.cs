@@ -117,6 +117,8 @@ public partial class App : Application
             _hotkeys = new HotkeyManager(_hwnd, () => _window.Dispatcher.BeginInvoke(TogglePause));
             _modeHotkeys = new HotkeyManager(_hwnd, () => service.RequestMode("Next"), 0x6924);   // the loop does the switching, from any thread
             service.ModeChanged += OnModeChanged;
+            _autoUpdate = new AutoUpdate(_services, OnUpdateFound);
+            _autoUpdate.Start();
             _services.ApplyInputOptions = ApplyInputOptions;
             service.Frame += OnFrame;
             ApplyInputOptions();
@@ -263,6 +265,22 @@ public partial class App : Application
 
     private HotkeyManager? _hotkeys;
     private HotkeyManager? _modeHotkeys;
+    private AutoUpdate? _autoUpdate;
+
+    /// <summary>The automatic check found a newer version: Home shows it, and Windows says so once for each version.</summary>
+    private void OnUpdateFound(UpdateInfo info)
+    {
+        if (_services is not { } s) return;
+        s.AvailableUpdate = info;
+        _window?.Dispatcher.BeginInvoke(() =>
+        {
+            s.UpdateChanged?.Invoke();
+            if (s.Settings.UpdateNotifiedTag == info.LatestTag || s.Settings.UpdateDismissedTag == info.LatestTag) return;
+            s.Settings.UpdateNotifiedTag = info.LatestTag;
+            s.Settings.Save();
+            _tray?.ShowBalloon("A new version is available", $"G923 Mapper {info.LatestTag} is out. Open the app to download it.");
+        });
+    }
 
     /// <summary>A mode was switched: a Windows notification, if the user wants one. (The wheel buzz is done by the mapper itself.)</summary>
     private void OnModeChanged(string? mode, int count, bool switched)
@@ -450,6 +468,7 @@ public partial class App : Application
             _services?.Switcher.Dispose();
             _hotkeys?.Dispose();
             _modeHotkeys?.Dispose();
+            _autoUpdate?.Dispose();
             _services?.Service.Stop();       // removes the virtual pad and releases any held keys
             RestoreWheelOnExit();
             _tray?.Dispose();

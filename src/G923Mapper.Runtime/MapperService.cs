@@ -317,12 +317,13 @@ public sealed class MapperService : IDisposable
             : _force.Enabled ? "Force feedback is not active: " + (ForceMessage.Length > 0 ? ForceMessage : "unknown reason") : "Force feedback is off.");
         WheelIds = $"VID_{wheel.Vid:X4} PID_{wheel.Pid:X4}";
         WheelUsbIds = (wheel.Vid, wheel.Pid);
+        PadKinds.SetFor(WheelEditions.Of(wheel.Vid, wheel.Pid));   // "auto" controller profiles: a PlayStation wheel gets a DualShock 4
 
         // A profile that says "auto" uses the calibrated entry for this very wheel (Xbox or PlayStation edition alike).
         if (DeviceRegistry.IsAuto(profile.Device)) device = _devices.Resolve(profile.Device, WheelUsbIds) ?? device;
         WheelCalibrated = _devices.IsKnownWheel(wheel.Vid, wheel.Pid);
         if (!WheelCalibrated)
-            Emit($"This wheel ({WheelIds}) has no saved calibration, so the built-in Xbox edition layout is being used. Run Settings, Calibrate to match it to this wheel.");
+            Emit($"This wheel ({WheelIds}) has no saved calibration, so the built-in {(WheelEditions.Of(wheel.Vid, wheel.Pid) == WheelEdition.PlayStation ? "PlayStation" : "Xbox")} edition layout is being used. Run Settings, Calibrate to match it to this wheel.");
 
         IVirtualPad pad;
         PadKind padKind = PadKinds.Of(profile);

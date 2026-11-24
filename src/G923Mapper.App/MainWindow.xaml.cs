@@ -51,6 +51,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _s = services;
+        _s.UpdateChanged = () => Dispatcher.BeginInvoke(ShowUpdate);
         PadView.Clickable = true;
         PadView.ControlClicked += AssignControl;
         KeyChips.ChipClicked += EditKeyMapping;
@@ -202,6 +203,28 @@ public partial class MainWindow : Window
         PadDiagram.ShowLabels = ShowLabelsBox.IsChecked == true;
         _s.Settings.ShowPadLabels = PadDiagram.ShowLabels;
         _s.Settings.Save();
+    }
+
+    /// <summary>The "a new version is available" line in the status card: shown while there is one the user has not put off.</summary>
+    private void ShowUpdate()
+    {
+        UpdateInfo? info = _s.AvailableUpdate;
+        bool show = info is { Newer: true } && info.LatestTag != Settings.UpdateDismissedTag;
+        UpdatePanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        if (show) UpdateText.Text = $"Version {info!.LatestTag} is available.";
+    }
+
+    private void UpdateDownload_Click(object sender, RoutedEventArgs e)
+    {
+        string url = _s.AvailableUpdate?.Url ?? "";
+        if (url.StartsWith("https://github.com/", StringComparison.OrdinalIgnoreCase))
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true }); } catch (System.ComponentModel.Win32Exception) { }
+    }
+
+    private void UpdateLater_Click(object sender, RoutedEventArgs e)
+    {
+        if (_s.AvailableUpdate is { } info) { Settings.UpdateDismissedTag = info.LatestTag; Settings.Save(); }
+        ShowUpdate();
     }
 
     private string _modeKey = "";
@@ -609,6 +632,8 @@ public partial class MainWindow : Window
     /// <summary>Write a new profile under a free file name, then select it.</summary>
     private void SaveNewProfile(Profile profile)
     {
+        // A new profile follows the wheel: a PlayStation edition wheel gets a DualShock 4, any other an Xbox 360 controller.
+        if (string.IsNullOrWhiteSpace(profile.Outputs.Pad)) profile.Outputs.Pad = PadKinds.AutoText;
         string key = Slug(profile.Name);
         string file = key + ".json";
         for (int n = 2; File.Exists(System.IO.Path.Combine(_s.ProfileDir, file)); n++)

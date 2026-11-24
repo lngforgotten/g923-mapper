@@ -27,6 +27,12 @@
                 <StackPanel Grid.Column="1" VerticalAlignment="Center">
                     <TextBlock x:Name="StatusTitle" FontSize="17" FontWeight="SemiBold" Text="Starting…" TextTrimming="CharacterEllipsis" />
                     <TextBlock x:Name="StatusDetail" Style="{StaticResource Muted}" Margin="0,2,0,0" />
+                    <StackPanel x:Name="UpdatePanel" Orientation="Horizontal" Margin="0,8,0,0" Visibility="Collapsed">
+                        <TextBlock x:Name="UpdateText" Foreground="{DynamicResource Success}" FontWeight="SemiBold" VerticalAlignment="Center" />
+                        <Button Content="Download" Style="{StaticResource Primary}" Padding="12,4" Margin="12,0,0,0" Click="UpdateDownload_Click" />
+                        <Button Content="Later" Style="{StaticResource Secondary}" Padding="12,4" Margin="6,0,0,0" Click="UpdateLater_Click"
+                                ToolTip="Hide this until an even newer version comes out." />
+                    </StackPanel>
                 </StackPanel>
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="HealthButton" Style="{StaticResource Secondary}" Margin="0,0,8,0" Padding="12,8" Click="Health_Click"

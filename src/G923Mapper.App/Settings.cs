@@ -76,6 +76,14 @@ public sealed class AppSettings
     public bool ModeToast { get; set; } = true;
     /// <summary>Which view the pop-out window was last in: Full, Compact, Mode, Controller or Rules.</summary>
     public string MiniView { get; set; } = "Full";
+    /// <summary>Look for a new version by itself, quietly, a little after start-up and about once a day. On by default; one tick in Settings turns it off.</summary>
+    public bool AutoUpdateCheck { get; set; } = true;
+    /// <summary>When the last automatic check reached GitHub (UTC, ISO text), so it runs about once a day and not on every start.</summary>
+    public string LastUpdateCheckUtc { get; set; } = "";
+    /// <summary>The version the user told Home to stop showing ("Later"); a newer one shows again.</summary>
+    public string UpdateDismissedTag { get; set; } = "";
+    /// <summary>The version a Windows notification was already shown for, so there is one notification per version.</summary>
+    public string UpdateNotifiedTag { get; set; } = "";
 
     /// <summary>Wheel-button combinations for pausing and for switching profile. Off by default.</summary>
     public ComboSettings Combos { get; set; } = new();

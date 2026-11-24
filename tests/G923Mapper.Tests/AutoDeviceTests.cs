@@ -41,8 +41,9 @@ public class AutoDeviceTests
     public void Auto_falls_back_to_the_built_in_layout_for_a_wheel_nobody_has_calibrated()
     {
         var reg = DeviceRegistry.CreateDefault();
-        Assert.False(reg.IsKnownWheel(0x046D, 0xC266));
-        Assert.Equal("g923_xbox", reg.Resolve("auto", (0x046D, 0xC266))!.Name);
+        Assert.False(reg.IsKnownWheel(0x046D, 0xC24F));                            // a wheel of some other kind
+        Assert.Equal("g923_xbox", reg.Resolve("auto", (0x046D, 0xC24F))!.Name);
+        Assert.True(reg.IsKnownWheel(0x046D, 0xC266));                             // the PlayStation edition is built in now
         Assert.Equal("g923_xbox", reg.Resolve("auto", null)!.Name);
     }
 

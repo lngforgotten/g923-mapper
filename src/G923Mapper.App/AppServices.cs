@@ -26,6 +26,10 @@ public sealed class AppServices
     /// <summary>The same for the shortcut that switches modes.</summary>
     public string ModeHotkeyProblem { get; set; } = "";
 
+    /// <summary>A newer version the automatic check found (null if none), and a callback for the window to show it.</summary>
+    public UpdateInfo? AvailableUpdate { get; set; }
+    public Action? UpdateChanged { get; set; }
+
     /// <summary>Whether HidHide currently hides the wheel. Cached, because asking HidHide takes a moment.</summary>
     public bool WheelHidden { get; private set; }
 

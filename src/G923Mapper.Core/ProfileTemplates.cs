@@ -181,7 +181,8 @@ public static class Templates
         Add("safety", "Safety", ProfileSafety.Effective(b), ProfileSafety.Effective(child));
         Add("outputs.keyboard", "Keyboard and mouse output", b.Outputs.Keyboard ? "on" : "off", child.Outputs.Keyboard ? "on" : "off");
         Add("outputs.turbo", "Turbo", b.Outputs.Turbo ? "on" : "off", child.Outputs.Turbo ? "on" : "off");
-        Add("outputs.pad", "Controller", PadKinds.Of(b) == PadKind.DualShock4 ? "DualShock 4" : "Xbox 360", PadKinds.Of(child) == PadKind.DualShock4 ? "DualShock 4" : "Xbox 360");
+        string PadName(Profile x) => PadKinds.Normalise(x) switch { PadKinds.AutoText => "match the wheel", PadKinds.DualShock4Text => "DualShock 4", _ => "Xbox 360" };
+        Add("outputs.pad", "Controller", PadName(b), PadName(child));
         Add("outputs.secondPad", "Second controller", b.Outputs.SecondPad ? "on" : "off", child.Outputs.SecondPad ? "on" : "off");
         Add("hideWheel", "Hide the wheel", b.HideWheel is bool hb ? (hb ? "hide" : "show") : "leave", child.HideWheel is bool hc ? (hc ? "hide" : "show") : "leave");
         Add("force.rumble", "Rumble strength", Opt(b.Force?.Rumble), Opt(child.Force?.Rumble));
@@ -252,7 +253,7 @@ public static class Templates
         var outputs = new List<string>();
         if (diffs.Contains("outputs.keyboard")) outputs.Add($"\"keyboard\": {(child.Outputs.Keyboard ? "true" : "false")}");
         if (diffs.Contains("outputs.turbo")) outputs.Add($"\"turbo\": {(child.Outputs.Turbo ? "true" : "false")}");
-        if (diffs.Contains("outputs.pad")) outputs.Add($"\"pad\": {JsonSerializer.Serialize(PadKinds.Of(child) == PadKind.DualShock4 ? PadKinds.DualShock4Text : "xbox360")}");
+        if (diffs.Contains("outputs.pad")) outputs.Add($"\"pad\": {JsonSerializer.Serialize(PadKinds.Normalise(child))}");
         if (diffs.Contains("outputs.secondPad")) outputs.Add($"\"secondPad\": {(child.Outputs.SecondPad ? "true" : "false")}");
         if (outputs.Count > 0) sb.AppendLine($"  \"outputs\": {{ {string.Join(", ", outputs)} }},");
 
