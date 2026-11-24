@@ -80,7 +80,7 @@ public partial class RuleEditorWindow : Window
     public bool Saved { get; private set; }
 
     /// <param name="latest">The mapper's latest snapshot, used by the Learn button; may return null when the mapper is stopped.</param>
-    public RuleEditorWindow(Profile profile, DeviceRegistry devices, string path, Func<MapperSnapshot?> latest, AppSettings? settings = null, Func<string, Profile?>? findTemplate = null)
+    public RuleEditorWindow(Profile profile, DeviceRegistry devices, string path, Func<MapperSnapshot?> latest, AppSettings? settings = null, Func<string, Profile?>? findTemplate = null, int startMode = -1)
     {
         InitializeComponent();
         _settings = settings;
@@ -123,11 +123,7 @@ public partial class RuleEditorWindow : Window
         HideWheelBox.SelectedIndex = copy.HideWheel is true ? 1 : copy.HideWheel is false ? 2 : 0;
         FeelMotors.ItemsSource = new[] { "Both motors", "Heavy only", "Light only" };
         FeelBox.IsChecked = copy.Force is { IsEmpty: false };
-        FeelRumble.Value = copy.Force?.Rumble ?? 50;
-        FeelSpring.Value = copy.Force?.Spring ?? 0;
-        FeelFriction.Value = copy.Force?.Friction ?? 0;
-        FeelMotors.SelectedIndex = string.Equals(copy.Force?.Motors, ForceMath.MotorsHeavy, StringComparison.OrdinalIgnoreCase) ? 1
-            : string.Equals(copy.Force?.Motors, ForceMath.MotorsLight, StringComparison.OrdinalIgnoreCase) ? 2 : 0;
+        ShowFeelValues(copy.Force);
         PadBox.ItemsSource = PadChoices;
         PadBox.SelectedItem = PadChoiceOf(copy);
         SecondPadBox.IsChecked = copy.Outputs.SecondPad;
@@ -151,8 +147,59 @@ public partial class RuleEditorWindow : Window
         RuleList.ItemsSource = _rows;
         if (_rows.Count > 0) RuleList.SelectedIndex = 0; else LoadRule(null);
         RefreshViewBox(-1);
+        if (startMode >= 0 && startMode < _modes.Count) SelectView(startMode);   // open on the mode that is active in the game
         Revalidate();
         _openedAs = ProfileWriter.ToJson(BuildProfile());   // what "nothing changed" looks like, to tell if there is anything to lose
+        try { _startText = File.Exists(_path) ? File.ReadAllText(_path) : ""; } catch (IOException) { }
+    }
+
+    private string _startText = "";       // the file exactly as it was when the window opened, for Revert
+    private bool _appliedSomething, _finalSaved, _bakMade;
+
+    /// <summary>Write the profile to its file now (the mapper reloads it by itself). False, with a message, if that could not be done.</summary>
+    private bool WriteNow()
+    {
+        try
+        {
+            if (!_bakMade && File.Exists(_path)) { File.Copy(_path, _path + ".bak", overwrite: true); _bakMade = true; }   // one .bak: the version from before this window
+            File.WriteAllText(_path, _lastJson);
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"Could not save {_path}:\n{ex.Message}", "Edit rules", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return false;
+        }
+    }
+
+    /// <summary>Use the changes now and keep the window open: for trying a value in the game, tweaking and trying again.</summary>
+    private void Apply_Click(object sender, RoutedEventArgs e)
+    {
+        Revalidate();
+        if (!_valid) { ApplyNote.Text = "This profile has problems that have to be fixed before it can be applied. They are listed at the bottom of the window."; return; }
+        if (!WriteNow()) return;
+        _openedAs = ProfileWriter.ToJson(BuildProfile());   // from here, "unsaved" means changed since this apply
+        _appliedSomething = true;
+        Saved = true;
+        RevertButton.IsEnabled = true;
+        ApplyNote.Text = $"Applied at {DateTime.Now:HH:mm:ss}: the mapper is using it now. Try it in the game, change what does not feel right and Apply again, then Save.";
+    }
+
+    /// <summary>Put the file back exactly as it was when the window opened, after changes were applied, and close.</summary>
+    private void Revert_Click(object sender, RoutedEventArgs e)
+    {
+        if (!_appliedSomething) return;
+        if (MessageBox.Show(this, "Put this profile back exactly as it was when you opened this window? Everything you applied since is undone, and this window closes.",
+                "Revert to start", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
+        try { File.WriteAllText(_path, _startText); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, $"Could not restore {_path}:\n{ex.Message}", "Revert to start", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+        _closingConfirmed = true;
+        Saved = true;   // the file changed, so the main window re-reads it
+        DialogResult = false;
     }
 
     private string _openedAs = "";
@@ -164,11 +211,11 @@ public partial class RuleEditorWindow : Window
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
     {
         base.OnClosing(e);
-        if (e.Cancel || Saved || _closingConfirmed || _openedAs.Length == 0) return;
+        if (e.Cancel || _finalSaved || _closingConfirmed || _openedAs.Length == 0) return;
         if (ProfileWriter.ToJson(BuildProfile()) == _openedAs) return;
 
         var answer = MessageBox.Show(this,
-            "You have changes to this profile that are not saved.\n\nYes: save them and close.\nNo: close without saving.\nCancel: keep editing.",
+            "You have changes to this profile that are not saved" + (_appliedSomething ? " (since you last applied)" : "") + ".\n\nYes: save them and close.\nNo: close without saving" + (_appliedSomething ? " (what you already applied stays)" : "") + ".\nCancel: keep editing.",
             "Unsaved changes", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel);
         if (answer == MessageBoxResult.Cancel) { e.Cancel = true; return; }
         if (answer == MessageBoxResult.No) { _closingConfirmed = true; return; }
@@ -600,6 +647,21 @@ public partial class RuleEditorWindow : Window
 
     // ---------------------------------------------------------------- modes
 
+    /// <summary>
+    /// Put a feel into the sliders. Anything it leaves unset starts from the app-wide Settings value, so ticking "Own force feedback" keeps what
+    /// the wheel already does (a friction of 30% in Settings stays 30%) instead of silently replacing it with zero.
+    /// </summary>
+    private void ShowFeelValues(ProfileForce? feel)
+    {
+        ForceSettings app = _settings?.Force ?? new ForceSettings();
+        FeelRumble.Value = feel?.Rumble ?? app.RumblePercent;
+        FeelSpring.Value = feel?.Spring ?? app.SpringPercent;
+        FeelFriction.Value = feel?.Friction ?? app.FrictionPercent;
+        string motors = feel?.Motors ?? app.Motors;
+        FeelMotors.SelectedIndex = string.Equals(motors, ForceMath.MotorsHeavy, StringComparison.OrdinalIgnoreCase) ? 1
+            : string.Equals(motors, ForceMath.MotorsLight, StringComparison.OrdinalIgnoreCase) ? 2 : 0;
+    }
+
     private ProfileForce? ForceFromUi() => FeelBox.IsChecked == true
         ? new ProfileForce
         {
@@ -616,11 +678,7 @@ public partial class RuleEditorWindow : Window
         _populating = true;
         FeelBox.Content = _view < 0 ? "Own force feedback" : "Own feel in this mode";
         FeelBox.IsChecked = own is { IsEmpty: false };
-        FeelRumble.Value = basis?.Rumble ?? 50;
-        FeelSpring.Value = basis?.Spring ?? 0;
-        FeelFriction.Value = basis?.Friction ?? 0;
-        FeelMotors.SelectedIndex = string.Equals(basis?.Motors, ForceMath.MotorsHeavy, StringComparison.OrdinalIgnoreCase) ? 1
-            : string.Equals(basis?.Motors, ForceMath.MotorsLight, StringComparison.OrdinalIgnoreCase) ? 2 : 0;
+        ShowFeelValues(basis);
         _populating = false;
         UpdateFeelUi();
     }
@@ -820,11 +878,7 @@ public partial class RuleEditorWindow : Window
         DeviceBox.SelectedItem = ((IEnumerable<string>)DeviceBox.ItemsSource).FirstOrDefault(n => n.Equals(p.Device, StringComparison.OrdinalIgnoreCase)) ?? p.Device;
         HideWheelBox.SelectedIndex = p.HideWheel is true ? 1 : p.HideWheel is false ? 2 : 0;
         FeelBox.IsChecked = p.Force is { IsEmpty: false };
-        FeelRumble.Value = p.Force?.Rumble ?? 50;
-        FeelSpring.Value = p.Force?.Spring ?? 0;
-        FeelFriction.Value = p.Force?.Friction ?? 0;
-        FeelMotors.SelectedIndex = string.Equals(p.Force?.Motors, ForceMath.MotorsHeavy, StringComparison.OrdinalIgnoreCase) ? 1
-            : string.Equals(p.Force?.Motors, ForceMath.MotorsLight, StringComparison.OrdinalIgnoreCase) ? 2 : 0;
+        ShowFeelValues(p.Force);
         PadBox.SelectedItem = PadChoiceOf(p);
         SecondPadBox.IsChecked = p.Outputs.SecondPad;
         ToBox.ItemsSource = ToChoices(p.Outputs.SecondPad, ModeNames);
@@ -1032,6 +1086,7 @@ public partial class RuleEditorWindow : Window
             if (File.Exists(_path)) File.Copy(_path, _path + ".bak", overwrite: true);
             File.WriteAllText(_path, _lastJson);
             Saved = true;
+            _finalSaved = true;
             DialogResult = true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

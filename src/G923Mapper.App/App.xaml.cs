@@ -112,6 +112,7 @@ public partial class App : Application
             }
             _window.ExitRequested += ExitApp;
             _window.ProfileInUse += OnProfileInUse;
+            StartHiddenGameWatch();
 
             // The optional shortcut that pauses and resumes the controller, and the "release when the game is not in front" option.
             _hotkeys = new HotkeyManager(_hwnd, () => _window.Dispatcher.BeginInvoke(TogglePause));
@@ -321,18 +322,46 @@ public partial class App : Application
         // last time, has no say. (When the game ends and another profile takes over, the wheel is given back.)
         bool gameDetected = string.Equals(s.Switcher.ActiveKey, key, StringComparison.OrdinalIgnoreCase);
         bool? wanted = WheelVisibility.WantedFor(s.Store.Get(key)?.HideWheel, gameDetected);
+
+        // The game that hid the wheel only lost the focus (another window came to the front, or Alt-Tab): keep it hidden. Giving it back and
+        // hiding it again each time would ask for permission every time. It is given back once that game has ended (see CheckHiddenGameEnded).
+        if (wanted is null && _visibility.HiddenFor is { } hiddenFor
+            && _visibility.KeepHidden(s.WheelHidden, WheelVisibility.GameRunning(s.Store.Get(hiddenFor), RunningProcesses.Names()))) return;
+
         // Editing the setting counts as a new decision, so the id includes it.
         bool? action = _visibility.OnProfileActive(key + "|" + (wanted?.ToString() ?? "-"), wanted, s.HidHide.IsInstalled, s.WheelHidden);
         if (action is not bool hide) return;
+        if (!hide) _visibility.MarkRestoreTried();
 
         _tray?.ShowBalloon(hide ? "Hiding the wheel for this profile" : "Showing the wheel again", "Windows will ask for permission.");
         var result = await s.SetWheelHiddenAsync(hide);
-        _visibility.Done(hide, result.Success);
+        _visibility.Done(hide, result.Success, key);
         AppLog.Info($"Profile \"{key}\": {(hide ? "hide" : "show")} wheel: {(result.Success ? "done" : result.Message)}");
         if (!result.Success) _tray?.ShowBalloon("Could not change the wheel", result.Message);
     }
 
-    /// <summary>Hide the wheel from games, or show it again, from the tray menu. One permission prompt; the result comes back as a notification.</summary>
+    private System.Windows.Threading.DispatcherTimer? _hiddenGameTimer;
+
+    /// <summary>Every few seconds: if the wheel was hidden for a game and that game has now closed, give the wheel back (one permission prompt).</summary>
+    private void StartHiddenGameWatch()
+    {
+        _hiddenGameTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+        _hiddenGameTimer.Tick += async (_, _) =>
+        {
+            if (_services is not { } s || !_visibility.HiddenByProfile || _visibility.HiddenFor is not { } key) return;
+            bool running = WheelVisibility.GameRunning(s.Store.Get(key), RunningProcesses.Names());
+            if (!_visibility.ShouldRestore(s.WheelHidden, running)) return;
+            _visibility.MarkRestoreTried();
+            _tray?.ShowBalloon("The game has closed: showing the wheel again", "Windows will ask for permission.");
+            var result = await s.SetWheelHiddenAsync(false);
+            _visibility.Done(false, result.Success, key);
+            AppLog.Info($"The game for \"{key}\" has closed: show wheel: {(result.Success ? "done" : result.Message)}");
+            if (!result.Success) _tray?.ShowBalloon("Could not show the wheel again", result.Message);
+        };
+        _hiddenGameTimer.Start();
+    }
+
+    /// <summary>Hide the wheel from games, or show it again, from the tray menu.</summary> One permission prompt; the result comes back as a notification.</summary>
     private async void ToggleWheelHidden()
     {
         if (_services is not { } s) return;

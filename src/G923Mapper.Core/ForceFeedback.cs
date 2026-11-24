@@ -21,6 +21,33 @@ public sealed class ForceSettings
     /// </summary>
     public int FrictionPercent { get; set; } = 0;
 
+    /// <summary>"spring" (the default): the wheel's own straight-line spring. "curve": a shaped centring force worked out by the app, see <see cref="CentringCurve"/>. In both, <see cref="SpringPercent"/> is the strength.</summary>
+    public string CentringStyle { get; set; } = CentringCurve.StyleSpring;
+
+    /// <summary>Curve: degrees either side of the middle over which the force ramps up from nothing, so the middle is not twitchy.</summary>
+    public int CentreDegrees { get; set; } = 12;
+
+    /// <summary>Curve: the angle at which the force is strongest.</summary>
+    public int PeakDegrees { get; set; } = 60;
+
+    /// <summary>Curve: how much force is left at full lock, as a share of the peak (100 means none is lost).</summary>
+    public int LighteningPercent { get; set; } = 40;
+
+    /// <summary>Curve: how strongly fast turns are resisted, so the wheel does not swing past the middle. 0 to 100.</summary>
+    public int DampingPercent { get; set; } = 5;
+
+    /// <summary>Curve: the least force the curve ever uses away from the middle, as a share of the wheel's full force; measured with the Auto button.</summary>
+    public int FloorPercent { get; set; } = 0;
+
+    /// <summary>Curve: true when this wheel turns the opposite way to the force sent to it, which the Auto measurement finds out.</summary>
+    public bool CentringReversed { get; set; } = false;
+
+    /// <summary>
+    /// Curve: the wheel the Auto measurement was made on (its USB ids as the app shows them). The curve runs only on that wheel, because a wheel
+    /// that pushes the other way round would be driven away from the middle; any other wheel keeps the plain spring until it has been measured.
+    /// </summary>
+    public string CentringWheel { get; set; } = "";
+
     /// <summary>Which of the game's two rumble motors the wheel plays: "both" (the default), "heavy" (the slow, strong one only) or "light" (the fast, fine one only).</summary>
     public string Motors { get; set; } = ForceMath.MotorsBoth;
 

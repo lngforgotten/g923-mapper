@@ -201,8 +201,10 @@
                                     <Button Content="Edit rules…" Style="{StaticResource Secondary}" Padding="16,8" Margin="0,0,8,0" Click="EditRules_Click" />
                                     <Button Content="Edit JSON file" Style="{StaticResource Secondary}" Padding="16,8" Margin="0,0,8,0" Click="EditFile_Click" />
                                     <Button Content="Open profiles folder" Style="{StaticResource Secondary}" Padding="16,8" Margin="0,0,8,0" Click="OpenFolder_Click" />
-                                    <Button Content="Earlier versions&#8230;" Style="{StaticResource Secondary}" Padding="16,8" Click="History_Click"
+                                    <Button Content="Earlier versions&#8230;" Style="{StaticResource Secondary}" Padding="16,8" Margin="0,0,8,0" Click="History_Click"
                                             ToolTip="Every change to a profile keeps the version before it. Restore one if an edit went wrong." />
+                                    <Button Content="Delete profile&#8230;" Style="{StaticResource Secondary}" Padding="16,8" Click="DeleteProfile_Click"
+                                            ToolTip="Remove the profile chosen on the Home tab. Its file is moved to a Deleted profiles folder, not erased, so it can be got back." />
                                 </StackPanel>
                             </StackPanel>
                         </Border>

@@ -579,7 +579,11 @@ public partial class MainWindow : Window
             return;
         }
         string path = System.IO.Path.Combine(_s.ProfileDir, item.File);
-        var dlg = new RuleEditorWindow(profile, _s.Devices, path, () => Service.Latest, _s.Settings, FindTemplate) { Owner = this };
+        // Open on the mode that is active in the game, when this is the profile that is running.
+        int startMode = -1;
+        if (Service.ModeName is { } activeMode && string.Equals(Service.Latest?.ProfileName, profile.Name, StringComparison.OrdinalIgnoreCase))
+            startMode = profile.Modes.FindIndex(m => string.Equals(m.Name, activeMode, StringComparison.OrdinalIgnoreCase));
+        var dlg = new RuleEditorWindow(profile, _s.Devices, path, () => Service.Latest, _s.Settings, FindTemplate, startMode) { Owner = this };
         if (dlg.ShowDialog() == true && dlg.Saved)
         {
             Store.Reload(item.File);
@@ -595,6 +599,43 @@ public partial class MainWindow : Window
         {
             Store.Reload(item.File);
             AppendLog($"Restored an earlier version of {item.File}.");
+        }
+    }
+
+    /// <summary>Where a deleted profile goes: next to the profiles folder, so it is out of the list but can still be moved back.</summary>
+    private string DeletedDir => System.IO.Path.Combine(System.IO.Path.GetDirectoryName(_s.ProfileDir.TrimEnd('\\', '/')) ?? _s.ProfileDir, "deleted-profiles");
+
+    private void DeleteProfile_Click(object sender, RoutedEventArgs e)
+    {
+        if (ProfileBox.SelectedItem is not ProfileItem item) return;
+        if (Store.Files.Count <= 1)
+        {
+            MessageBox.Show(this, "This is the only profile, so it is being kept. Make another profile first (Profiles tab, New profile) and then delete this one.",
+                "Delete profile", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        var profile = Store.Get(item.Key);
+        int users = profile is { IsTemplate: true }
+            ? Store.Files.Select(f => Store.Get(f)).Count(p => p?.Parent is { } pl && string.Equals(pl.Name, profile.Name, StringComparison.OrdinalIgnoreCase))
+            : 0;
+        bool running = Service.IsRunning && string.Equals(Service.Latest?.ProfileName, profile?.Name ?? item.Key, StringComparison.OrdinalIgnoreCase);
+        string text = $"Delete the profile \"{item.Key}\"?\n\nIts file is moved to a Deleted profiles folder rather than erased, so you can get it back by moving it into the profiles folder again."
+            + (users > 0 ? $"\n\n{users} profile{(users == 1 ? " is" : "s are")} based on this template. {(users == 1 ? "It keeps" : "They keep")} their own copy of it and carry on working." : "")
+            + (running ? "\n\nThis is the profile running now; the mapper will switch to another one." : "");
+        if (MessageBox.Show(this, text, "Delete profile", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+
+        try
+        {
+            Directory.CreateDirectory(DeletedDir);
+            string target = System.IO.Path.Combine(DeletedDir, $"{item.Key}-{DateTime.Now:yyyyMMdd-HHmmss}.json");
+            File.Move(System.IO.Path.Combine(_s.ProfileDir, item.File), target);
+            Store.Reload(item.File);
+            AppendLog($"Deleted \"{item.Key}\". Its file is in {DeletedDir}.");
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            MessageBox.Show(this, "Could not delete the profile:\n" + ex.Message, "Delete profile", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 

@@ -56,6 +56,7 @@ public sealed class MapperService : IDisposable
     public (byte Heavy, byte Light) RumbleNow => ((byte)_rumbleLarge, (byte)_rumbleSmall);
     private int _testRequested;
     private long _testUntil, _testStart;
+    private long _lastRecover, _lastRecoverLog = -60000;
     private long _buzzStart;
     private int _buzzPulses;
     private const int BuzzOnMs = 130, BuzzOffMs = 110;
@@ -167,6 +168,41 @@ public sealed class MapperService : IDisposable
 
     /// <summary>Shake the wheel briefly so the user can feel that force feedback works.</summary>
     public void TestForce() => Interlocked.Exchange(ref _testRequested, 1);
+
+    /// <summary>
+    /// Measure the wheel for the centring curve: with hands off, the force is raised slowly until the wheel turns a couple of degrees. That gives
+    /// the floor and which way a force pushes this wheel. The result arrives through <see cref="FloorMeasured"/>.
+    /// </summary>
+    public void MeasureFloor() => Interlocked.Exchange(ref _probeRequested, 1);
+
+    /// <summary>Raised on the service thread when a measurement started with <see cref="MeasureFloor"/> ends, worked or not.</summary>
+    public event Action<FloorMeasurement>? FloorMeasured;
+
+    /// <summary>True while the wheel is being measured.</summary>
+    public bool Measuring => _probe is not null;
+
+    /// <summary>The connected wheel has the effect the centring curve needs.</summary>
+    public bool CurveSupported { get; private set; }
+
+    private long _lastResend;
+    private long _diagAt;
+
+    private int _probeRequested;
+    private volatile FrictionProbe? _probe;
+    private long _probeStartMs;
+    private bool _haveAngle;
+    private double _lastAngle, _velocity;
+    private long _lastAngleMs;
+
+    /// <summary>The wheel's angle in degrees from its centre (positive towards higher axis readings), and half its total turn.</summary>
+    private static bool TryAngle(RawInput raw, DeviceMap device, out double angle, out double half)
+    {
+        angle = 0;
+        half = device.RotationDegrees / 2;
+        if (!raw.Live || device.RotationDegrees <= 0 || !device.Axes.TryGetValue("wheel", out var wa) || wa.SourceIndex < 0 || wa.Max <= wa.Min) return false;
+        angle = (raw.Axes[wa.SourceIndex] - wa.Centre) * device.RotationDegrees / (wa.Max - wa.Min);
+        return true;
+    }
 
     /// <summary>Raised on the service thread when state or status text changes.</summary>
     public event Action<MapperState, string>? StatusChanged;
@@ -312,6 +348,8 @@ public sealed class MapperService : IDisposable
         WheelName = instance.ProductName;
         ForceSupported = wheel.ForceSupported;
         ForceActive = wheel.Force is not null;
+        CurveSupported = wheel.Force?.HasCurve == true;
+        _probe = null; _haveAngle = false;
         ForceMessage = wheel.ForceMessage;
         Emit(ForceActive ? "Force feedback is active."
             : _force.Enabled ? "Force feedback is not active: " + (ForceMessage.Length > 0 ? ForceMessage : "unknown reason") : "Force feedback is off.");
@@ -434,7 +472,7 @@ public sealed class MapperService : IDisposable
                     else Emit("Move the wheel first so it starts reporting, then set the centre.");
                 }
 
-                ApplyForce(wheel, clock.ElapsedMilliseconds);
+                ApplyForce(wheel, clock.ElapsedMilliseconds, raw, device);
 
                 if (clock.ElapsedMilliseconds >= nextScan)
                 {
@@ -506,6 +544,7 @@ public sealed class MapperService : IDisposable
                 if (held != heldNotice)
                 {
                     heldNotice = held;
+                    _diagAt = nowMs + 1200;
                     Set(MapperState.Running, held ?? $"Running \"{profile.Name}\"");
                     Emit(held is null ? "Controller back on." : held);
                 }
@@ -593,7 +632,7 @@ public sealed class MapperService : IDisposable
     }
 
     /// <summary>Spring and rumble for this frame. Cheap: the effect layer only talks to the wheel when a value changes.</summary>
-    private void ApplyForce(DirectInputWheel wheel, long nowMs)
+    private void ApplyForce(DirectInputWheel wheel, long nowMs, RawInput raw, DeviceMap device)
     {
         WheelForce? f = wheel.Force;
         if (f is null) return;
@@ -605,7 +644,81 @@ public sealed class MapperService : IDisposable
             _testUntil = nowMs + 3000;
             _testLogged = false;
         }
-        f.SetSpring(s.SpringPercent);
+
+        bool haveAngle = TryAngle(raw, device, out double angle, out double half);
+
+        // Once a second, send the spring and friction again (see WheelForce.Resend), so a wheel that was reset behind our back gets them back.
+        if (nowMs - _lastResend >= 1000) { _lastResend = nowMs; f.Resend(); }
+
+        // A moment after the game comes to the front or goes away, record what the wheel says about its effects: evidence for "the centring stops".
+        if (_diagAt > 0 && nowMs >= _diagAt)
+        {
+            _diagAt = 0;
+            Emit("Wheel effects after the focus change: " + f.Diagnose());
+        }
+
+        // Measuring the wheel for the centring curve takes over the wheel until it is done.
+        if (Interlocked.Exchange(ref _probeRequested, 0) == 1 && _probe is null)
+        {
+            if (!f.HasCurve || !haveAngle)
+                FloorMeasured?.Invoke(new FloorMeasurement(false, 0, false, WheelIds, !f.HasCurve ? "This wheel does not accept the kind of force the curve needs." : "The wheel is not reporting, so it cannot be measured. Move it a little and try again."));
+            else
+            {
+                _probe = new FrictionProbe(angle);
+                _probeStartMs = nowMs;
+                Emit("Measuring the wheel for the centring curve: keep your hands off it.");
+            }
+        }
+        if (_probe is { } probe)
+        {
+            double push = probe.Step(angle, nowMs, haveAngle);
+            f.SetSpring(0); f.SetFriction(0); f.SetRumble(0, 0, 0);
+            f.SetCurveForce(CentringCurve.ToDevice(push, false), nowMs);
+            if (probe.Done)
+            {
+                f.SetCurveForce(0, nowMs);
+                _probe = null;
+                FloorMeasurement result = probe.Floor is double least
+                    ? new(true, (int)Math.Round(least * 100), probe.Reversed, WheelIds,
+                          $"The wheel starts to move at {least * 100:0}% force{(probe.Reversed ? "; it pushes the other way round, which is now allowed for" : "")}.")
+                    : new(false, 0, false, WheelIds, probe.Problem);
+                Emit("Centring measurement: " + result.Message);
+                FloorMeasured?.Invoke(result);
+            }
+            return;
+        }
+
+        // The centring: the app's own curve when it is chosen and this wheel has been measured, otherwise the wheel's plain spring.
+        bool useCurve = CentringCurve.NormaliseStyle(s.CentringStyle) == CentringCurve.StyleCurve && f.HasCurve && haveAngle && s.CentringWheel == WheelIds;
+        if (useCurve)
+        {
+            if (_haveAngle && nowMs - _lastAngleMs >= 4)
+            {
+                double instant = (angle - _lastAngle) * 1000.0 / (nowMs - _lastAngleMs);
+                _velocity = _velocity * 0.7 + instant * 0.3;
+                _lastAngle = angle; _lastAngleMs = nowMs;
+            }
+            else if (!_haveAngle) { _haveAngle = true; _lastAngle = angle; _lastAngleMs = nowMs; _velocity = 0; }
+            f.SetSpring(0);
+            f.SetCurveForce(CentringCurve.ToDevice(CentringCurve.Force(angle, _velocity, s, half), s.CentringReversed), nowMs);
+        }
+        else
+        {
+            _haveAngle = false;
+            f.SetCurveForce(0, nowMs);
+            f.SetSpring(s.SpringPercent);
+        }
+
+        // If something else (usually a game that has opened the real wheel) interrupted the effects, put them back, and say so now and then.
+        if (nowMs - _lastRecover >= 400)
+        {
+            _lastRecover = nowMs;
+            if (f.Recover() is { } found && nowMs - _lastRecoverLog >= 10_000)
+            {
+                _lastRecoverLog = nowMs;
+                Emit("Force feedback was interrupted (another program may have taken the wheel): " + found + ". If this happens when a game is in front, hide the real wheel from it (Edit rules, Wheel, hide while its game runs).");
+            }
+        }
 
         // The mode buzz: one short pulse of the heavy motor for the first mode, two for the second, and so on.
         int buzz = Interlocked.Exchange(ref _buzzRequest, 0);

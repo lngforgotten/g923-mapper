@@ -299,10 +299,16 @@
         </Border>
 
         <DockPanel Grid.Row="6">
-            <TextBlock DockPanel.Dock="Left" Style="{StaticResource Hint}" VerticalAlignment="Center" Margin="2,0,0,0"
-                       Text="Saving rewrites the file in a tidy layout, drops any comments, and keeps a .bak copy of the old version." />
+            <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="2,0,12,0" MaxWidth="470">
+                <TextBlock x:Name="ApplyNote" Style="{StaticResource Hint}" TextWrapping="Wrap"
+                           Text="Apply puts your changes into use now and keeps this window open, so you can try them in the game, tweak and apply again. Save does the same and closes. Saving rewrites the file in a tidy layout, drops any comments, and keeps a .bak copy of the old version." />
+            </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button x:Name="RevertButton" Content="Revert to start" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="Revert_Click" IsEnabled="False"
+                        ToolTip="Put the profile back exactly as it was when you opened this window, and close it. Only available once you have applied something." />
                 <Button Content="Cancel" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="Cancel_Click" />
+                <Button x:Name="ApplyButton" Content="Apply" Style="{StaticResource Secondary}" MinWidth="90" Margin="0,0,8,0" Click="Apply_Click"
+                        ToolTip="Use these changes now (the mapper reloads the profile) and keep this window open." />
                 <Button x:Name="SaveButton" Content="Save" Style="{StaticResource Primary}" MinWidth="100" Click="Save_Click" />
             </StackPanel>
         </DockPanel>

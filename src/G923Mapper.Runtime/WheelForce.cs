@@ -1,4 +1,4 @@
-using Vortice.DirectInput;
+﻿using Vortice.DirectInput;
 
 namespace G923Mapper;
 
@@ -10,8 +10,9 @@ public sealed class WheelForce : IDisposable
 {
     private readonly IDirectInputDevice8 _dev;
     private readonly int[] _axis;
-    private IDirectInputEffect? _spring, _heavy, _light, _friction;
-    private int _springPct = -1, _heavyMag = -1, _lightMag = -1, _frictionPct = -1;
+    private IDirectInputEffect? _spring, _heavy, _light, _friction, _curve;
+    private int _springPct = -1, _heavyMag = -1, _lightMag = -1, _frictionPct = -1, _curveMag;
+    private long _curveSentMs = long.MinValue / 2, _curveStartedMs = long.MinValue / 2;
 
     /// <summary>Which kind of effect gives the steady resistance: "friction", a "damper" if the wheel has no friction effect, or "none" if it has neither.</summary>
     public string FrictionKind { get; private set; } = "none";
@@ -44,6 +45,7 @@ public sealed class WheelForce : IDisposable
                 Conditions = [new Condition { Offset = 0, PositiveCoefficient = 0, NegativeCoefficient = 0, PositiveSaturation = ForceMath.Max, NegativeSaturation = ForceMath.Max, DeadBand = 0 }],
             });
             f.MakeFriction();
+            f.MakeCurve();
             f._heavy = f.Make(shape, new PeriodicForce { Magnitude = 0, Offset = 0, Phase = 0, Period = ForceMath.HeavyPeriodMicroseconds });
             f._light = f.Make(shape, new PeriodicForce { Magnitude = 0, Offset = 0, Phase = 0, Period = ForceMath.LightPeriodMicroseconds });
         }
@@ -71,6 +73,47 @@ public sealed class WheelForce : IDisposable
         AppLog.Warn("The wheel accepts neither a friction nor a damper effect, so the friction slider will do nothing on it.");
     }
 
+    /// <summary>The effect that carries the app''s own centring curve. Not every wheel offers a constant force; without it the curve is simply unavailable.</summary>
+    private void MakeCurve()
+    {
+        try { _curve = Make(EffectGuid.ConstantForce, new ConstantForce { Magnitude = 0 }, CurveLifetimeMicroseconds); }
+        catch (SharpGen.Runtime.SharpGenException ex) { AppLog.Warn($"The wheel has no constant-force effect ({ex.ResultCode}), so the centring curve is unavailable; the plain spring still works."); }
+    }
+
+    /// <summary>The curve effect only lives this long and is renewed while the app is alive, so a frozen app cannot leave the wheel pulling.</summary>
+    private const int CurveLifetimeMicroseconds = 400_000;
+    private const int CurveRefreshMs = 100, CurveMinGapMs = 8, CurveMinStep = 40;
+
+    /// <summary>True when the wheel took the constant-force effect, so the centring curve can be used.</summary>
+    public bool HasCurve => _curve is not null;
+
+    /// <summary>
+    /// Send the centring force (the device's signed value, -10000 to 10000; 0 stops it). Cheap to call every frame: it only talks to the wheel when
+    /// the value has moved a little or the effect is due to be renewed, and never more than about 125 times a second.
+    /// </summary>
+    public void SetCurveForce(int magnitude, long nowMs)
+    {
+        if (_curve is null) return;
+        magnitude = Math.Clamp(magnitude, -ForceMath.Max, ForceMath.Max);
+        if (magnitude == 0)
+        {
+            if (_curveMag != 0) { _curve.Stop(); _curveMag = 0; }
+            return;
+        }
+        bool wasOff = _curveMag == 0;
+        bool changed = Math.Abs(magnitude - _curveMag) >= CurveMinStep;
+        bool renew = nowMs - _curveStartedMs >= CurveRefreshMs;
+        if (!wasOff && !changed && !renew) return;
+        if (!wasOff && nowMs - _curveSentMs < CurveMinGapMs) return;
+        _curveSentMs = nowMs;
+        if (wasOff || changed)
+        {
+            _curve.SetParameters(new EffectParameters { Parameters = new ConstantForce { Magnitude = magnitude } }, EffectParameterFlags.TypeSpecificParameters);
+            _curveMag = magnitude;
+        }
+        if (wasOff || renew) { _curveStartedMs = nowMs; Begin(_curve, "centring curve"); }
+    }
+
     /// <summary>Apply the friction strength. Cheap to call every frame; only changes when the value does.</summary>
     public void SetFriction(int percent)
     {
@@ -82,10 +125,10 @@ public sealed class WheelForce : IDisposable
         Begin(_friction, FrictionKind);
     }
 
-    private IDirectInputEffect Make(Guid kind, TypeSpecificParameters p) => _dev.CreateEffect(kind, new EffectParameters
+    private IDirectInputEffect Make(Guid kind, TypeSpecificParameters p, int durationMicroseconds = -1) => _dev.CreateEffect(kind, new EffectParameters
     {
         Flags = EffectFlags.ObjectIds | EffectFlags.Cartesian,
-        Duration = -1,                  // infinite; we stop it ourselves
+        Duration = durationMicroseconds,   // -1 = infinite; we stop it ourselves
         SamplePeriod = 0,
         Gain = ForceMath.Max,
         TriggerButton = -1,             // not tied to a button
@@ -147,6 +190,49 @@ public sealed class WheelForce : IDisposable
         if (wasSilent) Begin(effect, name);
     }
 
+    /// <summary>
+    /// Another program can interrupt the wheel's effects: a game that opens the wheel itself (it sees the real wheel as well as the virtual
+    /// controller) may take it over or reset it while its window is in front, which silences the centring spring and the rest until it lets go.
+    /// This looks at every effect that should be playing and starts it again if it is not. Returns what it found, or null when all is well:
+    /// the effects that were put back, and the ones the wheel would not restart (with Windows' error code), so the cause can be seen in the log.
+    /// </summary>
+    public string? Recover()
+    {
+        var restored = new List<string>();
+        var refused = new List<string>();
+        void Check(IDirectInputEffect? effect, string name, bool shouldPlay)
+        {
+            if (effect is null || !shouldPlay) return;
+            try
+            {
+                if (effect.Status.HasFlag(EffectStatus.Playing)) return;
+                var result = effect.Start();
+                if (result.Failure) refused.Add($"{name} ({result.Code:X8})"); else restored.Add(name);
+            }
+            catch (SharpGen.Runtime.SharpGenException ex) { refused.Add($"{name} ({ex.ResultCode.Code:X8})"); }
+        }
+        Check(_spring, "spring", _springPct > 0);
+        Check(_friction, FrictionKind, _frictionPct > 0);
+        Check(_curve, "centring curve", _curveMag != 0);
+        Check(_heavy, "heavy rumble", _heavyMag > 0);
+        Check(_light, "light rumble", _lightMag > 0);
+        if (restored.Count == 0 && refused.Count == 0) return null;
+        string text = restored.Count > 0 ? "put back: " + string.Join(", ", restored) : "";
+        if (refused.Count > 0) text += (text.Length > 0 ? "; " : "") + "would not restart: " + string.Join(", ", refused);
+        return text;
+    }
+
+    /// <summary>
+    /// Send the spring and the friction to the wheel again on the next frame, even though their values have not changed. A program that opens the
+    /// real wheel can reset it behind DirectInput's back, so the effects still read as playing while the wheel has dropped them; sending them
+    /// again once a second puts them back within a second, whatever the cause.
+    /// </summary>
+    public void Resend()
+    {
+        _springPct = -1;
+        _frictionPct = -1;
+    }
+
     /// <summary>What the wheel says about each effect and its actuators. For diagnosing "it stopped" reports.</summary>
     public string Diagnose()
     {
@@ -157,25 +243,27 @@ public sealed class WheelForce : IDisposable
         }
         string device;
         try { device = _dev.GetForceFeedbackState().ToString(); } catch (SharpGen.Runtime.SharpGenException ex) { device = "err:" + ex.ResultCode.ToString(); }
-        return $"heavy={State(_heavy)}({_heavyMag}) light={State(_light)}({_lightMag}) spring={State(_spring)}({_springPct}%) {FrictionKind}={State(_friction)}({_frictionPct}%) device=[{device}]";
+        return $"heavy={State(_heavy)}({_heavyMag}) light={State(_light)}({_lightMag}) spring={State(_spring)}({_springPct}%) curve={State(_curve)}({_curveMag}) {FrictionKind}={State(_friction)}({_frictionPct}%) device=[{device}]";
     }
 
     /// <summary>Silence everything, for example when the game stops rumbling or the mapper stops.</summary>
     public void Silence()
     {
-        try { _heavy?.Stop(); _light?.Stop(); _spring?.Stop(); _friction?.Stop(); } catch (SharpGen.Runtime.SharpGenException) { }
+        try { _heavy?.Stop(); _light?.Stop(); _spring?.Stop(); _friction?.Stop(); _curve?.Stop(); } catch (SharpGen.Runtime.SharpGenException) { }
         _heavyMag = _lightMag = 0;
         _springPct = 0;
         _frictionPct = 0;
+        _curveMag = 0;
     }
 
     public void Dispose()
     {
         Silence();
-        foreach (var e in new[] { _spring, _heavy, _light, _friction })
+        foreach (var e in new[] { _spring, _heavy, _light, _friction, _curve })
         {
             try { e?.Unload(); e?.Dispose(); } catch (SharpGen.Runtime.SharpGenException) { }
         }
-        _spring = _heavy = _light = _friction = null;
+        _spring = _heavy = _light = _friction = _curve = null;
     }
 }
+

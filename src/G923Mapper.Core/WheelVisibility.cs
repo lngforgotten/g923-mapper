@@ -14,6 +14,14 @@ public static class WheelVisibility
     /// </summary>
     public static bool? WantedFor(bool? profileSetting, bool gameDetected) => gameDetected ? profileSetting : null;
 
+    /// <summary>True when one of the profile's games (its match.exe list) is among the running programs, in front or not.</summary>
+    public static bool GameRunning(Profile? profile, IEnumerable<string> running)
+    {
+        if (profile is null || profile.Match.Exe.Count == 0) return false;
+        var names = new HashSet<string>(running.Select(ProfileSelector.Normalize), StringComparer.OrdinalIgnoreCase);
+        return profile.Match.Exe.Any(e => names.Contains(ProfileSelector.Normalize(e)));
+    }
+
     /// <param name="wanted">The active profile's <c>hideWheel</c> (null = no opinion).</param>
     /// <param name="hidHideInstalled">HidHide can be driven.</param>
     /// <param name="currentlyHidden">Whether the wheel is hidden right now.</param>
@@ -50,10 +58,29 @@ public sealed class WheelVisibilityTracker
         return WheelVisibility.Decide(wanted, hidHideInstalled, currentlyHidden, HiddenByProfile);
     }
 
-    /// <summary>Record the outcome of a hide or show that was carried out.</summary>
-    public void Done(bool hid, bool success)
+    /// <summary>The profile whose game this feature hid the wheel for (null when it has not).</summary>
+    public string? HiddenFor { get; private set; }
+
+    /// <summary>Record the outcome of a hide or show that was carried out; <paramref name="key"/> is the profile a hide was for.</summary>
+    public void Done(bool hid, bool success, string? key = null)
     {
         if (!success) return;
         HiddenByProfile = hid;   // showing it again clears the flag
+        HiddenFor = hid ? key : null;
+        _restoreTried = false;
     }
+
+    private bool _restoreTried;
+
+    /// <summary>Note that giving the wheel back has been started, so nothing else asks again (a declined permission prompt must not repeat).</summary>
+    public void MarkRestoreTried() => _restoreTried = true;
+
+    /// <summary>
+    /// The wheel was hidden for a game: give it back now only when that game has ended. A game that merely lost focus, or went behind another
+    /// window, keeps the wheel hidden, so there is no permission prompt every time it is switched away from. Asks once.
+    /// </summary>
+    public bool ShouldRestore(bool wheelHidden, bool gameStillRunning) => HiddenByProfile && wheelHidden && !gameStillRunning && !_restoreTried;
+
+    /// <summary>The wheel was hidden for a game that is still running, so another profile coming to the front must not give it back.</summary>
+    public bool KeepHidden(bool wheelHidden, bool gameStillRunning) => HiddenByProfile && wheelHidden && gameStillRunning;
 }
