@@ -1,4 +1,4 @@
-using System.Text.Json;
+﻿using System.Text.Json;
 
 namespace G923Mapper;
 
@@ -140,6 +140,11 @@ public sealed class Profile
     /// say) while the game keeps the wheel and its force feedback. There is no virtual controller, so rules that send to it do nothing.
     /// </summary>
     public bool KeepKeys { get; set; }
+    /// <summary>
+    /// Keyboard keys and mouse buttons that switch this profile's modes while it is running (see <see cref="ModeShortcut"/>). Null: the app-wide
+    /// list from Settings is used. An empty list: this profile has no shortcuts. Games bind different keys, so a profile can have its own.
+    /// </summary>
+    public List<ModeShortcut>? ModeShortcuts { get; set; }
     public List<Rule> Rules { get; set; } = new();
     /// <summary>Modes of this profile (see <see cref="ProfileMode"/>). Empty = the profile has just its own rules. A rule sending to "Mode:Next", "Mode:Previous" or "Mode:Name" switches between them.</summary>
     public List<ProfileMode> Modes { get; set; } = new();
@@ -229,6 +234,8 @@ public static class ProfileLoader
             errors.Add($"Unknown device \"{p.Device}\". Use \"{DeviceRegistry.AutoDevice}\" (whichever wheel is connected) or one of: {string.Join(", ", devices.Names)}.");
 
         ValidateModes(p, errors, warnings);
+        if (p.ModeShortcuts is { } shortcuts)
+            foreach (string problem in ModeShortcutList.Check(shortcuts).Problems) warnings.Add("modeShortcuts: " + problem);
 
         foreach (var (r, at) in AllRules(p))
         {
@@ -428,3 +435,4 @@ public sealed record Target(TargetKind Kind, PadAxis Axis = default, PadButton B
         return false;
     }
 }
+

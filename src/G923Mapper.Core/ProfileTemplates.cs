@@ -1,4 +1,4 @@
-using System.Security.Cryptography;
+﻿using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -122,6 +122,7 @@ public static class Templates
             if (Has(root, "safety")) r.Safety = child.Safety;
             if (Has(root, "hideWheel")) r.HideWheel = child.HideWheel;
             if (Has(root, "leaveWheel")) r.LeaveWheel = child.LeaveWheel;
+            if (Has(root, "modeShortcuts")) r.ModeShortcuts = CopyShortcuts(child.ModeShortcuts);
             if (Has(root, "keepKeys")) r.KeepKeys = child.KeepKeys;
             if (Has(root, "outputs"))
             {
@@ -188,6 +189,7 @@ public static class Templates
         Add("outputs.secondPad", "Second controller", b.Outputs.SecondPad ? "on" : "off", child.Outputs.SecondPad ? "on" : "off");
         Add("hideWheel", "Hide the wheel", b.HideWheel is bool hb ? (hb ? "hide" : "show") : "leave", child.HideWheel is bool hc ? (hc ? "hide" : "show") : "leave");
         Add("leaveWheel", "Leave the wheel alone", b.LeaveWheel ? "on" : "off", child.LeaveWheel ? "on" : "off");
+        Add("modeShortcuts", "Mode shortcuts", ShortcutText(b.ModeShortcuts), ShortcutText(child.ModeShortcuts));
         Add("keepKeys", "Keep sending keys", b.KeepKeys ? "on" : "off", child.KeepKeys ? "on" : "off");
         Add("force.rumble", "Rumble strength", Opt(b.Force?.Rumble), Opt(child.Force?.Rumble));
         Add("force.spring", "Centring spring", Opt(b.Force?.Spring), Opt(child.Force?.Spring));
@@ -197,6 +199,12 @@ public static class Templates
     }
 
     /// <summary>How a profile differs from its template: each setting and each rule (by output target) that is its own. Empty for a profile with no template.</summary>
+    private static List<ModeShortcut>? CopyShortcuts(List<ModeShortcut>? list) =>
+        list?.Select(m => new ModeShortcut { Trigger = m.Trigger, Action = m.Action }).ToList();
+
+    private static string ShortcutText(List<ModeShortcut>? list) =>
+        list is null ? "the app-wide ones" : list.Count == 0 ? "none" : string.Join(", ", list.Select(m => m.Describe()));
+
     public static IReadOnlyList<TemplateDiff> Diff(Profile child)
     {
         var diffs = new List<TemplateDiff>();
@@ -262,6 +270,10 @@ public static class Templates
         if (outputs.Count > 0) sb.AppendLine($"  \"outputs\": {{ {string.Join(", ", outputs)} }},");
 
         if (diffs.Contains("hideWheel")) sb.AppendLine(child.HideWheel is bool hw ? $"  \"hideWheel\": {(hw ? "true" : "false")}," : "  \"hideWheel\": null,");
+        if (diffs.Contains("modeShortcuts"))
+            sb.AppendLine(child.ModeShortcuts is { } shortcuts
+                ? "  \"modeShortcuts\": [" + string.Join(", ", shortcuts.Select(m => $"{{ \"trigger\": \"{m.Trigger}\", \"action\": \"{m.Action.Replace("\"", "")}\" }}")) + "],"
+                : "  \"modeShortcuts\": null,");
         if (diffs.Contains("leaveWheel")) sb.AppendLine($"  \"leaveWheel\": {(child.LeaveWheel ? "true" : "false")},");
         if (diffs.Contains("keepKeys")) sb.AppendLine($"  \"keepKeys\": {(child.KeepKeys ? "true" : "false")},");
 
@@ -366,6 +378,7 @@ public static class Templates
             case "outputs.secondPad": child.Outputs.SecondPad = b.Outputs.SecondPad; break;
             case "hideWheel": child.HideWheel = b.HideWheel; break;
             case "leaveWheel": child.LeaveWheel = b.LeaveWheel; break;
+            case "modeShortcuts": child.ModeShortcuts = CopyShortcuts(b.ModeShortcuts); break;
             case "keepKeys": child.KeepKeys = b.KeepKeys; break;
             case "force.rumble": SetForce(child, f => f.Rumble = b.Force?.Rumble); break;
             case "force.spring": SetForce(child, f => f.Spring = b.Force?.Spring); break;
@@ -394,3 +407,4 @@ public static class Templates
     public static ProfileLoadResult ApplyUpdate(Profile child, Profile newTemplate, DeviceRegistry devices) =>
         ProfileLoader.Parse(ChildJson(child, Flatten(newTemplate)), devices);
 }
+

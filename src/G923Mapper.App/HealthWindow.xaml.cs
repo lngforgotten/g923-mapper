@@ -66,7 +66,12 @@ public partial class HealthWindow : Window
             case HealthAction.OpenLogs: if (AppLog.Directory is string d) Open(d); break;
             case HealthAction.OpenSettings:
                 Close();
-                if (Owner is not null) new SettingsWindow(_s) { Owner = Owner }.ShowDialog();
+                if (Owner is not null)
+                {
+                    var settings = new SettingsWindow(_s) { Owner = Owner };
+                    settings.ShowDialog();
+                    if (settings.OpenSetupRequested && Owner is MainWindow main) main.ShowSetup();
+                }
                 break;
         }
     }

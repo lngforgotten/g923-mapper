@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -34,6 +34,8 @@ internal sealed class ModeShortcutWindow : Window
         WindowStartupLocation = WindowStartupLocation.CenterOwner;
         ResizeMode = ResizeMode.NoResize;
         SetResourceReference(BackgroundProperty, "WindowBack");
+        SetResourceReference(ForegroundProperty, "TextPrimary");
+        FontFamily = owner.FontFamily; FontSize = owner.FontSize;
 
         _action.ItemsSource = new[] { "Next mode", "Previous mode", "A mode by name" };
         _action.SelectedIndex = 0;
@@ -140,3 +142,4 @@ internal sealed class ModeShortcutWindow : Window
 
     private void UpdateOk() => _ok.IsEnabled = _trigger.Length > 0 && (_action.SelectedIndex != 2 || _name.Text.Trim().Length > 0);
 }
+

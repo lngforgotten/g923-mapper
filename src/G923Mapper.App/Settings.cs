@@ -87,6 +87,8 @@ public sealed class AppSettings
     /// for the Restart now button on Home instead. Only matters while <see cref="AutoInstallUpdates"/> is on.
     /// </summary>
     public bool AutoApplyUpdates { get; set; } = true;
+    /// <summary>Say so, once per game, when a game with its own wheel support runs while the app holds the wheel. On by default.</summary>
+    public bool NativeWheelHints { get; set; } = true;
     /// <summary>Centring curve presets the person saved under their own names (see Settings, Force feedback, Car).</summary>
     public System.Collections.Generic.List<CentringPreset> CentringPresets { get; set; } = new();
     /// <summary>When the last automatic check reached GitHub (UTC, ISO text), so closing and reopening the app within a few minutes does not ask again.</summary>
@@ -154,6 +156,7 @@ public sealed class AppSettings
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 }
+
 
 
 

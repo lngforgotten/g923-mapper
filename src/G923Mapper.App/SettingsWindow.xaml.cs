@@ -37,7 +37,7 @@ public partial class SettingsWindow : Window
         ModeHotkeyMessage.Text = !_s.Settings.ModeHotkey.Enabled ? "" : _s.ModeHotkeyProblem.Length > 0 ? _s.ModeHotkeyProblem : $"Active: {_s.Settings.ModeHotkey.Combo}";
         ModeBuzzBox.IsChecked = _s.Settings.ModeBuzz;
         RefreshShortcutList();
-        ModeToastBox.IsChecked = _s.Settings.ModeToast;
+        NativeHintsBox.IsChecked = _s.Settings.NativeWheelHints;        ModeToastBox.IsChecked = _s.Settings.ModeToast;
         HotkeyBox.IsChecked = _s.Settings.Hotkey.Enabled;
         CombosBox.IsChecked = _s.Settings.Combos.Enabled;
         ShowCombos();
@@ -290,6 +290,13 @@ public partial class SettingsWindow : Window
         ModeShortcutMessage.Text = problems.Count == 0 ? "" : "Not used: " + string.Join(" ", problems);
     }
 
+    private void NativeHints_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_loading) return;
+        _s.Settings.NativeWheelHints = NativeHintsBox.IsChecked == true;
+        _s.Settings.Save();
+    }
+
     private void ModeShortcutList_Changed(object sender, SelectionChangedEventArgs e) => RemoveShortcutButton.IsEnabled = ModeShortcutBox.SelectedIndex >= 0;
 
     private void AddShortcut_Click(object sender, RoutedEventArgs e)
@@ -317,7 +324,7 @@ public partial class SettingsWindow : Window
         _s.Settings.Save();
         _s.ApplyInputOptions?.Invoke();
         RefreshShortcutList();
-    }
+        NativeHintsBox.IsChecked = _s.Settings.NativeWheelHints;    }
 
     private void RemoveShortcut_Click(object sender, RoutedEventArgs e)
     {
@@ -327,7 +334,7 @@ public partial class SettingsWindow : Window
         _s.Settings.Save();
         _s.ApplyInputOptions?.Invoke();
         RefreshShortcutList();
-    }
+        NativeHintsBox.IsChecked = _s.Settings.NativeWheelHints;    }
 
     private void ModeOptions_Changed(object sender, RoutedEventArgs e)
     {
@@ -348,6 +355,15 @@ public partial class SettingsWindow : Window
         if (_loading) return;
         _s.Settings.AutoUpdateCheck = AutoUpdateBox.IsChecked == true;
         _s.Settings.Save();
+    }
+
+    /// <summary>Set when the person pressed "Open the setup assistant": the window that opened Settings shows it once Settings has closed (Settings is a dialog, and a dialog blocks the windows behind it).</summary>
+    public bool OpenSetupRequested { get; private set; }
+
+    private void SetupAssistant_Click(object sender, RoutedEventArgs e)
+    {
+        OpenSetupRequested = true;
+        Close();
     }
 
     private void AutoInstall_Changed(object sender, RoutedEventArgs e)
@@ -840,6 +856,8 @@ public partial class SettingsWindow : Window
 
     private void Done_Click(object sender, RoutedEventArgs e) => Close();
 }
+
+
 
 
 

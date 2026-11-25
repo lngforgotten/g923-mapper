@@ -1,4 +1,4 @@
-namespace G923Mapper;
+﻿namespace G923Mapper;
 
 public sealed record Preset(string Id, string Title, string Description, string Json)
 {
@@ -114,7 +114,7 @@ public static class Presets
     /// templates above they claim their game (so they switch on by themselves) and may use keyboard output, so they are Standard profiles:
     /// not for games with anti-cheat that you have not checked.
     /// </summary>
-    public static readonly IReadOnlyList<Preset> Gallery =
+    private static readonly IReadOnlyList<Preset> CheckedGames =
     [
         new("game-wardogs-lean", "Game: Wardogs, lean on the pedals",
             "Leans in Wardogs with the pedals instead of the keyboard: the clutch presses Q (lean left) and the accelerator presses E (lean right), a third of the way down. " +
@@ -134,6 +134,16 @@ public static class Presets
             """),
     ];
 
+    /// <summary>The games above, then one profile for each game with its own wheel support that leaves the wheel alone while the game runs.</summary>
+    public static readonly IReadOnlyList<Preset> Gallery = CheckedGames.Concat(NativeWheelGames.All.Select(SimPreset)).ToList();
+
+    private static Preset SimPreset(NativeWheelGame game) => new(
+        "sim-" + game.Id,
+        $"Game: {game.Name}, wheel left to the game",
+        $"{game.Name} drives the wheel itself, force feedback and rev lights included. This profile lets go of the wheel completely while the game runs (no virtual controller, nothing between the game and the wheel) " +
+        $"and switches on by itself when {game.Exes[0]} starts. To keep shifter or button presses as keys, tick \"but still send keys and mouse\" in Edit rules.",
+        NativeWheelGames.ProfileJson(game));
+
     /// <summary>
     /// A new profile from a preset, with the given display name. Presets other than the GTA one do not claim any game
     /// (their match list is empty), so a copy never steals auto-switching from the original.
@@ -146,3 +156,4 @@ public static class Presets
         return p;
     }
 }
+

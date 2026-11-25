@@ -123,6 +123,8 @@ public partial class App : Application
             // The optional shortcut that pauses and resumes the controller, and the "release when the game is not in front" option.
             _hotkeys = new HotkeyManager(_hwnd, () => _window.Dispatcher.BeginInvoke(TogglePause));
             _modeInputs = new ModeShortcutListener(_hwnd, action => service.RequestMode(action));    // watches only while shortcuts are set
+            service.ShortcutsChanged += list => { _profileShortcuts = list; _window?.Dispatcher.BeginInvoke(ApplyEffectiveShortcuts); };
+            StartNativeGameWatch();
             _modeHotkeys = new HotkeyManager(_hwnd, () => service.RequestMode("Next"), 0x6924);   // the loop does the switching, from any thread
             service.ModeChanged += OnModeChanged;
             _services.RestartForUpdate = RestartForUpdate;
@@ -277,6 +279,39 @@ public partial class App : Application
     private HotkeyManager? _hotkeys;
     private HotkeyManager? _modeHotkeys;
     private ModeShortcutListener? _modeInputs;
+    private System.Collections.Generic.IReadOnlyList<ModeShortcut>? _profileShortcuts;      // the running profile's own list; null = use the app-wide one
+
+    /// <summary>The shortcuts in force now: the running profile's own, or the app-wide ones when it has none. Games bind different keys, so a profile can have its own.</summary>
+    private void ApplyEffectiveShortcuts() => _modeInputs?.Apply(_profileShortcuts ?? _services?.Settings.ModeShortcuts);
+
+    // ---------------------------------------------------------------- games with their own wheel support
+
+    private System.Windows.Threading.DispatcherTimer? _nativeGameTimer;
+    private readonly System.Collections.Generic.HashSet<string> _toldGames = new();
+
+    /// <summary>
+    /// Every few seconds: if a game with its own wheel support is running while a profile that holds the wheel is in use, say so once for that game.
+    /// Only a suggestion: nothing is changed.
+    /// </summary>
+    private void StartNativeGameWatch()
+    {
+        _nativeGameTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(6) };
+        _nativeGameTimer.Tick += (_, _) =>
+        {
+            if (_services is not { } s || !s.Settings.NativeWheelHints || s.Service.State != MapperState.Running) return;
+            string? name = s.Service.Latest?.ProfileName;
+            Profile? inUse = name is null ? null : s.Store.Get(name);
+            var profiles = s.Store.Files.Select(f => s.Store.Get(f)).Where(p => p is not null).Select(p => p!).ToList();
+            foreach (var game in NativeWheelGames.ToWarnAbout(RunningProcesses.Names(), profiles, inUse, _toldGames))
+            {
+                _toldGames.Add(game.Id);
+                var (title, text) = NativeWheelGames.Notice(game);
+                AppLog.Info($"{title}: {text}");
+                _tray?.ShowBalloon(title, text);
+            }
+        };
+        _nativeGameTimer.Start();
+    }
     private AutoUpdate? _autoUpdate;
 
     // ---------------------------------------------------------------- updating itself
@@ -487,7 +522,7 @@ public partial class App : Application
     {
         s.Service.ModeBuzz = s.Settings.ModeBuzz;
         s.ModeHotkeyProblem = "";
-        _modeInputs?.Apply(s.Settings.ModeShortcuts);
+        ApplyEffectiveShortcuts();
         if (_modeHotkeys is null) return;
         if (!s.Settings.ModeHotkey.Enabled) { _modeHotkeys.Unregister(); return; }
         if (!Hotkey.TryParse(s.Settings.ModeHotkey.Combo, out Hotkey? key, out string? why))
@@ -690,6 +725,7 @@ public partial class App : Application
             _hotkeys?.Dispose();
             _modeHotkeys?.Dispose();
             _modeInputs?.Dispose();
+            _nativeGameTimer?.Stop();
             _autoUpdate?.Dispose();
             _services?.Service.Stop();       // removes the virtual pad and releases any held keys
             RestoreWheelOnExit();
@@ -705,5 +741,6 @@ public partial class App : Application
         });
     }
 }
+
 
 

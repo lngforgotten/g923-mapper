@@ -123,6 +123,7 @@ public partial class RuleEditorWindow : Window
         HideWheelBox.SelectedIndex = copy.HideWheel is true ? 1 : copy.HideWheel is false ? 2 : 0;
         LeaveWheelBox.IsChecked = copy.LeaveWheel;
         KeepKeysBox.IsChecked = copy.KeepKeys;
+        _modeShortcuts = CopyShortcuts(copy.ModeShortcuts);
         FeelMotors.ItemsSource = new[] { "Both motors", "Heavy only", "Light only" };
         FeelBox.IsChecked = copy.Force is { IsEmpty: false };
         ShowFeelValues(copy.Force);
@@ -635,6 +636,7 @@ public partial class RuleEditorWindow : Window
         HideWheel = HideWheelBox.SelectedIndex switch { 1 => true, 2 => false, _ => null },
         LeaveWheel = LeaveWheelBox.IsChecked == true,
         KeepKeys = LeaveWheelBox.IsChecked == true && KeepKeysBox.IsChecked == true,
+        ModeShortcuts = CopyShortcuts(_modeShortcuts),
         Force = _view < 0 ? ForceFromUi() : _profileForce,
         Modes = _modes.Select((m, i) => new ProfileMode
         {
@@ -654,6 +656,18 @@ public partial class RuleEditorWindow : Window
 
     // ---------------------------------------------------------------- modes
 
+    private System.Collections.Generic.List<ModeShortcut>? _modeShortcuts;     // this profile's own mode shortcuts; null = the app-wide ones
+
+    private static System.Collections.Generic.List<ModeShortcut>? CopyShortcuts(System.Collections.Generic.List<ModeShortcut>? list) =>
+        list?.Select(m => new ModeShortcut { Trigger = m.Trigger, Action = m.Action }).ToList();
+
+    private void ModeShortcuts_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new ProfileShortcutsWindow(this, _modeShortcuts, _settings?.ModeShortcuts.Count ?? 0);
+        if (dlg.ShowDialog() != true) return;
+        _modeShortcuts = CopyShortcuts(dlg.Result);
+        Revalidate();
+    }
     /// <summary>
     /// Put a feel into the sliders. Anything it leaves unset starts from the app-wide Settings value, so ticking "Own force feedback" keeps what
     /// the wheel already does (a friction of 30% in Settings stays 30%) instead of silently replacing it with zero.
@@ -886,6 +900,7 @@ public partial class RuleEditorWindow : Window
         HideWheelBox.SelectedIndex = p.HideWheel is true ? 1 : p.HideWheel is false ? 2 : 0;
         LeaveWheelBox.IsChecked = p.LeaveWheel;
         KeepKeysBox.IsChecked = p.KeepKeys;
+        _modeShortcuts = CopyShortcuts(p.ModeShortcuts);
         FeelBox.IsChecked = p.Force is { IsEmpty: false };
         ShowFeelValues(p.Force);
         PadBox.SelectedItem = PadChoiceOf(p);
@@ -1106,4 +1121,5 @@ public partial class RuleEditorWindow : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 }
+
 

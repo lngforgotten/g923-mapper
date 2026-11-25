@@ -1,4 +1,4 @@
-using System.Globalization;
+﻿using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
@@ -255,6 +255,8 @@ public static class ProfileWriter
         if (p.HideWheel is bool hideWheel) sb.AppendLine($"  \"hideWheel\": {(hideWheel ? "true" : "false")},");
         if (p.LeaveWheel) sb.AppendLine("  \"leaveWheel\": true,");
         if (p.LeaveWheel && p.KeepKeys) sb.AppendLine("  \"keepKeys\": true,");
+        if (p.ModeShortcuts is { } shortcuts)
+            sb.AppendLine("  \"modeShortcuts\": [" + string.Join(", ", shortcuts.Select(m => $"{{ \"trigger\": {Str(m.Trigger)}, \"action\": {Str(m.Action)} }}")) + "],");
         if (p.Force is { IsEmpty: false } force)
         {
             var parts = new List<string>();
@@ -328,3 +330,4 @@ public static class ProfileWriter
     private static string Str(string s) => JsonSerializer.Serialize(s);
     private static string Num(double d) => d.ToString("R", CultureInfo.InvariantCulture);
 }
+

@@ -23,6 +23,16 @@
         <ScrollViewer VerticalScrollBarVisibility="Auto">
             <StackPanel Margin="0,0,12,0">
 
+                <!-- Get started -->
+                <Border Style="{StaticResource Card}" Margin="0,0,0,12">
+                    <StackPanel>
+                        <TextBlock Text="GET STARTED" Style="{StaticResource SectionTitle}" />
+                        <TextBlock TextWrapping="Wrap"
+                                   Text="A short checklist that gets a new setup working: the driver, your wheel, calibration, a profile, and an optional test. Its rows tick themselves as each one is done. It opens by itself the first time the app runs, and you can open it again here at any time." />
+                        <Button Content="Open the setup assistant..." Style="{StaticResource Secondary}" HorizontalAlignment="Left" Margin="0,12,0,0" Click="SetupAssistant_Click" />
+                    </StackPanel>
+                </Border>
+
                 <!-- Appearance -->
                 <Border Style="{StaticResource Card}">
                     <StackPanel>
@@ -85,7 +95,7 @@
                         </CheckBox>
                         <CheckBox x:Name="ModeToastBox" Content="Show a notification when the mode changes" Margin="22,6,0,0"
                                   Checked="ModeOptions_Changed" Unchecked="ModeOptions_Changed" />
-                        <TextBlock Text="Keyboard and mouse shortcuts for modes" FontWeight="SemiBold" Margin="0,16,0,0" />
+                        <TextBlock Text="Keyboard and mouse shortcuts for modes (for every profile that has none of its own)" FontWeight="SemiBold" Margin="0,16,0,0" TextWrapping="Wrap" />
                         <Grid Margin="22,8,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
                             <ListBox x:Name="ModeShortcutBox" MinHeight="64" MaxHeight="130" SelectionChanged="ModeShortcutList_Changed" />
@@ -97,7 +107,12 @@
                         </Grid>
                         <TextBlock x:Name="ModeShortcutMessage" Style="{StaticResource Muted}" Margin="22,6,0,0" TextWrapping="Wrap" />
                         <TextBlock Style="{StaticResource Hint}" Margin="22,4,0,0"
-                                   Text="Press a key (a function key, the number pad, or any key with Ctrl, Alt or Shift) or a mouse button (middle, back or forward) to move to the next mode, the previous one, or a mode by name, from inside any game. The app only watches: the key or click still reaches the game, nothing is blocked, and nothing is stored. It watches only while at least one shortcut is listed here." />
+                                   Text="Press a key (a function key, the number pad, or any key with Ctrl, Alt or Shift) or a mouse button (middle, back or forward) to move to the next mode, the previous one, or a mode by name, from inside any game. The app only watches: the key or click still reaches the game, nothing is blocked, and nothing is stored. It watches only while at least one shortcut is listed here. Games bind different keys, so a profile can have its own list instead: Edit rules, Mode shortcuts." />
+                        <CheckBox x:Name="NativeHintsBox" Margin="0,16,0,0" Checked="NativeHints_Changed" Unchecked="NativeHints_Changed">
+                            <TextBlock TextWrapping="Wrap" Text="Tell me when a game with its own wheel support is running while the app holds the wheel" />
+                        </CheckBox>
+                        <TextBlock Style="{StaticResource Hint}" Margin="22,4,0,0" TextWrapping="Wrap"
+                                   Text="Games such as Assetto Corsa, iRacing and rFactor 2 drive the wheel themselves. The app holding the wheel can stop their force feedback and rev lights. This says so once per game and suggests a profile that lets go of the wheel (New profile, Game: ..., wheel left to the game). It never changes anything by itself." />
 
                         <CheckBox x:Name="CombosBox" Content="Use wheel button combinations" Margin="0,14,0,0" Checked="Combos_Changed" Unchecked="Combos_Changed" />
                         <Grid Margin="22,8,0,0">
@@ -345,6 +360,8 @@
         </StackPanel>
     </Grid>
 </Window>
+
+
 
 
 

@@ -109,6 +109,8 @@
                             ToolTip="Tick any of the profile's rules that should not apply while this mode is active." />
                     <Button x:Name="SwitchRuleButton" Content="Add a switch button" Style="{StaticResource Secondary}" Padding="10,4" Margin="6,0,0,4" Click="SwitchRule_Click"
                             ToolTip="Add a rule so a wheel button moves to the next mode. Press Learn on the new rule to pick the button." />
+                    <Button x:Name="ModeShortcutsButton" Content="Mode shortcuts..." Style="{StaticResource Secondary}" Padding="10,4" Margin="6,0,0,4" Click="ModeShortcuts_Click"
+                            ToolTip="Keyboard keys and mouse buttons that switch this profile's modes while it runs. Games bind different keys, so this profile can have its own, or use the app-wide ones from Settings." />
                     <TextBlock x:Name="ModeNote" Style="{StaticResource Hint}" Margin="0,2,0,0" TextWrapping="Wrap" Width="{Binding ActualWidth, ElementName=ModeRow}" />
                 </WrapPanel>
                 <WrapPanel x:Name="TemplateRow" Grid.Row="6" Grid.ColumnSpan="6" Margin="0,10,0,0" Visibility="Collapsed">
@@ -318,5 +320,6 @@
         </DockPanel>
     </Grid>
 </Window>
+
 
 

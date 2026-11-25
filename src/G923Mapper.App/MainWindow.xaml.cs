@@ -416,9 +416,11 @@ public partial class MainWindow : Window
 
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
-        new SettingsWindow(_s) { Owner = this }.ShowDialog();
+        var settings = new SettingsWindow(_s) { Owner = this };
+        settings.ShowDialog();
         RefreshProfiles();
         UpdateHealth();
+        if (settings.OpenSetupRequested) ShowSetup();
     }
 
     // ---------------------------------------------------------------- profiles
@@ -708,8 +710,13 @@ public partial class MainWindow : Window
             return mi;
         }
         menu.Items.Add(Item("Pop-out view", (_, _) => ShowMini()));
-        menu.Items.Add(Item("Setup assistant…",(_, _) => ShowSetup()));
         menu.Items.Add(Item("Open log folder", (_, _) => { if (AppLog.Directory is string d) System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("explorer.exe", "\"" + d + "\"") { UseShellExecute = true }); }));
+        menu.Items.Add(new Separator());
+        // The profile is chosen right here on Home, so deleting it belongs here too (the Profiles tab has the same button).
+        string chosen = ProfileBox.SelectedItem is ProfileItem picked ? picked.Key : "";
+        var delete = Item(chosen.Length > 0 ? $"Delete the profile \"{chosen}\"…" : "Delete this profile…", (_, _) => DeleteProfile_Click(this, new RoutedEventArgs()));
+        delete.IsEnabled = chosen.Length > 0;
+        menu.Items.Add(delete);
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Exit G923 Mapper", (_, _) => ExitRequested?.Invoke()));   // closing the window only hides it to the tray
         menu.IsOpen = true;

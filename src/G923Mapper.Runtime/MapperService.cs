@@ -159,6 +159,12 @@ public sealed class MapperService : IDisposable
     public event Action<string?, int, bool>? ModeChanged;
 
     /// <summary>
+    /// Raised on the service thread when the running profile starts or is reloaded: its own mode shortcuts, or null when it has none of its own (the
+    /// app-wide ones apply). An empty list means no shortcuts, which is what a profile that lets go of the wheel gets.
+    /// </summary>
+    public event Action<IReadOnlyList<ModeShortcut>?>? ShortcutsChanged;
+
+    /// <summary>
     /// Ask for another mode: "Next", "Previous" or a mode's name. Done by the loop on its next turn, the same way as a wheel button that does it.
     /// Ignored if the running profile has no such mode.
     /// </summary>
@@ -169,6 +175,7 @@ public sealed class MapperService : IDisposable
         _modeNames = p.Modes.Select(x => x.Name).ToArray();
         _modeIndex = index;
         ModeChanged?.Invoke(ProfileModes.NameAt(p, index), p.Modes.Count, switched);
+        ShortcutsChanged?.Invoke(p.ModeShortcuts);
     }
 
     /// <summary>Shake the wheel briefly so the user can feel that force feedback works.</summary>
@@ -375,6 +382,7 @@ public sealed class MapperService : IDisposable
         ForceActive = false; ForceSupported = false; CurveSupported = false; ForceMessage = "";
         _probe = null;
         _modeNames = []; _modeIndex = -1;
+        ShortcutsChanged?.Invoke([]);       // nothing of ours is between the game and the wheel, so no mode shortcuts either
         Set(MapperState.StandingAside, $"Leaving the wheel alone for \"{profile.Name}\"");
         Emit($"\"{profile.Name}\" leaves the wheel alone: the mapper has let go of the wheel and the virtual controller, so the game has the wheel to itself.");
         int seen = _store.Version;
@@ -850,5 +858,6 @@ public sealed class MapperService : IDisposable
         }
     }
 }
+
 
 
