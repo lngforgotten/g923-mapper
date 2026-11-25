@@ -152,7 +152,7 @@ public partial class ButtonMapWindow : Window
         if (affected.Count > 0)
         {
             string list = string.Join("\n", affected.Select(a => $"  {a.Key}: {string.Join(", ", a.Names)}"));
-            var answer = MessageBox.Show(this,
+            var answer = ThemedMessageBox.Show(this,
                 $"These profiles use button names you are removing or changing:\n\n{list}\n\nThose rules will stop working until you update them. Continue?",
                 "Name buttons", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
             if (answer != MessageBoxResult.Yes) return;
@@ -167,9 +167,10 @@ public partial class ButtonMapWindow : Window
         }
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, $"Could not save {_devicesPath}:\n{ex.Message}", "Name buttons", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, $"Could not save {_devicesPath}:\n{ex.Message}", "Name buttons", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 }
+

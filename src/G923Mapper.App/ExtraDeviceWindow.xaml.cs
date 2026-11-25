@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -292,9 +292,10 @@ public partial class ExtraDeviceWindow : Window
         }
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, $"Could not save {_s.DevicesPath}:\n{ex.Message}", "Add a device", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, $"Could not save {_s.DevicesPath}:\n{ex.Message}", "Add a device", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 }
+

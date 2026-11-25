@@ -37,7 +37,7 @@ public partial class App : Application
             // Already running. Just bring that window to the front; no error box.
             AppLog.Info("Another copy is already running; bringing it to the front.");
             if (!SignalExisting(requested ?? 1))
-                MessageBox.Show("G923 Mapper is already running. Look for its icon in the system tray.",
+                ThemedMessageBox.Show("G923 Mapper is already running. Look for its icon in the system tray.",
                     "G923 Mapper", MessageBoxButton.OK, MessageBoxImage.Information);
             Shutdown();
             return;
@@ -65,7 +65,7 @@ public partial class App : Application
             catch (Exception ex)
             {
                 AppLog.Error("devices.json could not be read", ex);
-                MessageBox.Show($"devices.json could not be read and was ignored:\n{ex.Message}", "G923 Mapper");
+                ThemedMessageBox.Show($"devices.json could not be read and was ignored:\n{ex.Message}", "G923 Mapper");
             }
 
             Directory.CreateDirectory(appData);
@@ -175,7 +175,7 @@ public partial class App : Application
         catch (Exception ex)
         {
             AppLog.Error("Startup failed", ex);
-            MessageBox.Show("G923 Mapper could not start:\n\n" + ex.Message + "\n\nDetails are in the log folder.",
+            ThemedMessageBox.Show("G923 Mapper could not start:\n\n" + ex.Message + "\n\nDetails are in the log folder.",
                 "G923 Mapper", MessageBoxButton.OK, MessageBoxImage.Error);
             ExitApp();
         }
@@ -185,7 +185,7 @@ public partial class App : Application
     private void OfferDriverIfMissing(bool minimised)
     {
         if (minimised || HealthProbe.Service("ViGEmBus").installed) return;
-        var answer = MessageBox.Show(
+        var answer = ThemedMessageBox.Show(
             "G923 Mapper needs the ViGEmBus driver to create the virtual Xbox 360 controller, and it is not installed yet.\n\n" +
             "Open the download page now? Install it (it asks for administrator permission), then restart G923 Mapper.",
             "One thing is missing", MessageBoxButton.YesNo, MessageBoxImage.Information);
@@ -202,7 +202,7 @@ public partial class App : Application
         {
             AppLog.Error("Unhandled UI exception", ev.Exception);
             ev.Handled = true;
-            MessageBox.Show("Something went wrong, but G923 Mapper is still running.\n\n" + ev.Exception.Message +
+            ThemedMessageBox.Show("Something went wrong, but G923 Mapper is still running.\n\n" + ev.Exception.Message +
                             "\n\nDetails were written to the log (Settings, then Open log folder).",
                 "G923 Mapper", MessageBoxButton.OK, MessageBoxImage.Warning);
         };
@@ -426,12 +426,12 @@ public partial class App : Application
         StagedUpdate? staged = UpdatePackage.ReadStaged(AppSettings.StagedDir);
         if (staged is null || !UpdatePackage.IsNewer(staged, RunningVersion) || exe is null || !UpdatePackage.IsInstalledCopy(exe, InstallDir))
         {
-            MessageBox.Show("There is no update ready to install.", "G923 Mapper", MessageBoxButton.OK, MessageBoxImage.Information);
+            ThemedMessageBox.Show("There is no update ready to install.", "G923 Mapper", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
         if (!UpdatePackage.Swap(staged.ExePath, exe, out string problem))
         {
-            MessageBox.Show("The update could not be installed, so nothing was changed:\n\n" + problem, "G923 Mapper", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show("The update could not be installed, so nothing was changed:\n\n" + problem, "G923 Mapper", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         FinishSwap(staged);
@@ -741,6 +741,7 @@ public partial class App : Application
         });
     }
 }
+
 
 
 

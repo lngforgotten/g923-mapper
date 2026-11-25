@@ -1,4 +1,4 @@
-using System.Linq;
+﻿using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -38,7 +38,7 @@ public partial class NewProfileWindow : Window
         Result = Presets.Instantiate(p, NameBox.Text, _devices);
         if (Result is null)
         {
-            MessageBox.Show(this, "That template could not be loaded with the current device settings.", "New profile",
+            ThemedMessageBox.Show(this, "That template could not be loaded with the current device settings.", "New profile",
                 MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -47,3 +47,4 @@ public partial class NewProfileWindow : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 }
+

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -258,7 +258,8 @@ public partial class CalibrationWindow : Window
         }
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, $"Could not save {_devicesPath}:\n{ex.Message}", "Calibration", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, $"Could not save {_devicesPath}:\n{ex.Message}", "Calibration", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 }
+

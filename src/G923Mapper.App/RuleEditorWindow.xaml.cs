@@ -170,7 +170,7 @@ public partial class RuleEditorWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, $"Could not save {_path}:\n{ex.Message}", "Edit rules", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, $"Could not save {_path}:\n{ex.Message}", "Edit rules", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
     }
@@ -192,12 +192,12 @@ public partial class RuleEditorWindow : Window
     private void Revert_Click(object sender, RoutedEventArgs e)
     {
         if (!_appliedSomething) return;
-        if (MessageBox.Show(this, "Put this profile back exactly as it was when you opened this window? Everything you applied since is undone, and this window closes.",
+        if (ThemedMessageBox.Show(this, "Put this profile back exactly as it was when you opened this window? Everything you applied since is undone, and this window closes.",
                 "Revert to start", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
         try { File.WriteAllText(_path, _startText); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, $"Could not restore {_path}:\n{ex.Message}", "Revert to start", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, $"Could not restore {_path}:\n{ex.Message}", "Revert to start", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         _closingConfirmed = true;
@@ -217,7 +217,7 @@ public partial class RuleEditorWindow : Window
         if (e.Cancel || _finalSaved || _closingConfirmed || _openedAs.Length == 0) return;
         if (ProfileWriter.ToJson(BuildProfile()) == _openedAs) return;
 
-        var answer = MessageBox.Show(this,
+        var answer = ThemedMessageBox.Show(this,
             "You have changes to this profile that are not saved" + (_appliedSomething ? " (since you last applied)" : "") + ".\n\nYes: save them and close.\nNo: close without saving" + (_appliedSomething ? " (what you already applied stays)" : "") + ".\nCancel: keep editing.",
             "Unsaved changes", MessageBoxButton.YesNoCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel);
         if (answer == MessageBoxResult.Cancel) { e.Cancel = true; return; }
@@ -228,7 +228,7 @@ public partial class RuleEditorWindow : Window
         Dispatcher.BeginInvoke(() =>
         {
             Revalidate();
-            if (!_valid) { MessageBox.Show(this, "This profile has problems that have to be fixed before it can be saved. They are listed at the bottom of the window.", "Unsaved changes", MessageBoxButton.OK, MessageBoxImage.Information); return; }
+            if (!_valid) { ThemedMessageBox.Show(this, "This profile has problems that have to be fixed before it can be saved. They are listed at the bottom of the window.", "Unsaved changes", MessageBoxButton.OK, MessageBoxImage.Information); return; }
             Save_Click(this, new RoutedEventArgs());
         });
     }
@@ -607,7 +607,7 @@ public partial class RuleEditorWindow : Window
         if (_populating) return;
         if (KeyboardBox.IsChecked == true)
         {
-            var answer = MessageBox.Show(this,
+            var answer = ThemedMessageBox.Show(this,
                 "Keyboard output sends simulated key presses. In games with anti-cheat (for example GTA Online with BattlEye) " +
                 "synthetic keyboard input is more likely to look like automation than a gamepad does. That is a judgement call, " +
                 "not a verified rule, but the safe choice is to leave it off for online games.\n\n" +
@@ -765,7 +765,7 @@ public partial class RuleEditorWindow : Window
     {
         if (_modes.Count >= ProfileModes.MaxModes)
         {
-            MessageBox.Show(this, $"A profile can have at most {ProfileModes.MaxModes} modes.", "Add mode", MessageBoxButton.OK, MessageBoxImage.Information);
+            ThemedMessageBox.Show(this, $"A profile can have at most {ProfileModes.MaxModes} modes.", "Add mode", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
         var dlg = new AddModeWindow(n => ProfileModes.IsReservedName(n) || _modes.Any(m => string.Equals(m.Name, n, StringComparison.OrdinalIgnoreCase)),
@@ -813,7 +813,7 @@ public partial class RuleEditorWindow : Window
         EditorMode m = _modes[_view];
         var switching = _rows.Concat(_modes.SelectMany(x => x.Rows)).Where(r => r.Rule.To.Trim().Equals("Mode:" + m.Name, StringComparison.OrdinalIgnoreCase)).ToList();
         string extra = switching.Count > 0 ? $"\n\n{switching.Count} rule{(switching.Count == 1 ? "" : "s")} that switch{(switching.Count == 1 ? "es" : "")} to it will be removed too." : "";
-        if (MessageBox.Show(this, $"Delete the mode \"{m.Name}\" and its {m.Rows.Count} rule{(m.Rows.Count == 1 ? "" : "s")}?{extra}", "Delete mode",
+        if (ThemedMessageBox.Show(this, $"Delete the mode \"{m.Name}\" and its {m.Rows.Count} rule{(m.Rows.Count == 1 ? "" : "s")}?{extra}", "Delete mode",
                 MessageBoxButton.OKCancel, MessageBoxImage.Warning, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
         foreach (RuleRow row in switching)
         {
@@ -966,7 +966,7 @@ public partial class RuleEditorWindow : Window
         menu.Items.Add(new Separator());
         menu.Items.Add(Item("Stop following the template (make this profile standalone)", (_, _) =>
         {
-            if (MessageBox.Show(this, "Make this profile standalone? It keeps all its current rules and settings, but no longer follows the template or is offered its changes.",
+            if (ThemedMessageBox.Show(this, "Make this profile standalone? It keeps all its current rules and settings, but no longer follows the template or is offered its changes.",
                     "Stop following the template", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
             _parent = null;
             Revalidate();
@@ -979,7 +979,7 @@ public partial class RuleEditorWindow : Window
         ProfileLoadResult result = Templates.ApplyUpdate(BuildProfile(), template, _devices);
         if (!result.Ok)
         {
-            MessageBox.Show(this, "The updated profile would not be valid, so nothing was changed:\n\n" + string.Join("\n", result.Errors.Take(6)), "Update from template", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, "The updated profile would not be valid, so nothing was changed:\n\n" + string.Join("\n", result.Errors.Take(6)), "Update from template", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         _parent = result.Profile!.Parent;
@@ -1123,12 +1123,13 @@ public partial class RuleEditorWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, $"Could not save {_path}:\n{ex.Message}", "Edit rules", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, $"Could not save {_path}:\n{ex.Message}", "Edit rules", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 }
+
 
 
 

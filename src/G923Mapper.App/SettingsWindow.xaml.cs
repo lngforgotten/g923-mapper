@@ -56,6 +56,7 @@ public partial class SettingsWindow : Window
 
         ForceSettings f = _s.Settings.Force;
         FfbBox.IsChecked = f.Enabled;
+        UpdateFfbDependents();
         RumbleSlider.Value = f.RumblePercent;
         SpringSlider.Value = f.SpringPercent;
         FrictionSlider.Value = f.FrictionPercent;
@@ -135,7 +136,7 @@ public partial class SettingsWindow : Window
         try { StartupRegistration.Set(StartupBox.IsChecked == true, Environment.ProcessPath ?? ""); }
         catch (Exception ex) when (ex is UnauthorizedAccessException or System.Security.SecurityException)
         {
-            MessageBox.Show(this, "Windows would not let this setting be changed: " + ex.Message, "Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, "Windows would not let this setting be changed: " + ex.Message, "Settings", MessageBoxButton.OK, MessageBoxImage.Warning);
             _loading = true; StartupBox.IsChecked = StartupRegistration.IsEnabled(); _loading = false;
         }
     }
@@ -449,7 +450,7 @@ public partial class SettingsWindow : Window
         {
             AntiCheatList.Load(AppSettings.AntiCheatPath);   // creates the file with the defaults if it is not there yet
             Process.Start(new ProcessStartInfo("notepad.exe", $"\"{AppSettings.AntiCheatPath}\"") { UseShellExecute = true });
-            MessageBox.Show(this, "Add one program name per line (for example GTA5.exe), save, then restart G923 Mapper. " +
+            ThemedMessageBox.Show(this, "Add one program name per line (for example GTA5.exe), save, then restart G923 Mapper. " +
                                   "Profiles for these games can only use the plain virtual controller: keyboard output is switched off for them.",
                 "Anti-cheat games", MessageBoxButton.OK, MessageBoxImage.Information);
         }
@@ -496,7 +497,23 @@ public partial class SettingsWindow : Window
         FloorText.Text = $"{(int)FloorSlider.Value}%";
     }
 
-    private void Ffb_Changed(object sender, RoutedEventArgs e) => PushForce();
+    private void Ffb_Changed(object sender, RoutedEventArgs e)
+    {
+        UpdateFfbDependents();
+        PushForce();
+    }
+
+    /// <summary>
+    /// Everything the wheel's motors do (rumble, the centring spring and curve, friction, the buzz when the mode changes) needs force feedback.
+    /// With it off, say so where it matters, and grey out the mode buzz, instead of leaving settings that quietly do nothing.
+    /// </summary>
+    private void UpdateFfbDependents()
+    {
+        bool on = FfbBox.IsChecked == true;
+        FfbOffNote.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+        ModeBuzzBox.IsEnabled = on;
+        BuzzNote.Visibility = on ? Visibility.Collapsed : Visibility.Visible;
+    }
     private void Motors_Changed(object sender, SelectionChangedEventArgs e) => PushForce();
     private void Style_Changed(object sender, SelectionChangedEventArgs e) => PushForce();
     private void Force_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
@@ -607,15 +624,15 @@ public partial class SettingsWindow : Window
         if (name is null) return;
         if (CentringPresetBook.NameProblem(name) is { } problem)
         {
-            MessageBox.Show(this, problem, "Save centring preset", MessageBoxButton.OK, MessageBoxImage.Information);
+            ThemedMessageBox.Show(this, problem, "Save centring preset", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
         var preset = CentringPresetBook.FromSettings(name, _s.Settings.Force);
         if (CentringPresetBook.IsMine(_s.Settings.CentringPresets, name)
-            && MessageBox.Show(this, $"You already have a preset called \"{preset.Name}\". Replace it?", "Save centring preset", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+            && ThemedMessageBox.Show(this, $"You already have a preset called \"{preset.Name}\". Replace it?", "Save centring preset", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
         if (!CentringPresetBook.Save(_s.Settings.CentringPresets, preset))
         {
-            MessageBox.Show(this, $"You can keep up to {CentringPresetBook.MaxOwnPresets} presets of your own. Delete one first.", "Save centring preset", MessageBoxButton.OK, MessageBoxImage.Information);
+            ThemedMessageBox.Show(this, $"You can keep up to {CentringPresetBook.MaxOwnPresets} presets of your own. Delete one first.", "Save centring preset", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
         _s.Settings.Save();
@@ -628,7 +645,7 @@ public partial class SettingsWindow : Window
         int i = CentringPresetBox.SelectedIndex - 1 - CentringCurve.Presets.Count;
         if (i < 0 || i >= _s.Settings.CentringPresets.Count) return;
         string name = _s.Settings.CentringPresets[i].Name;
-        if (MessageBox.Show(this, $"Delete your preset \"{name}\"?", "Delete centring preset", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        if (ThemedMessageBox.Show(this, $"Delete your preset \"{name}\"?", "Delete centring preset", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
         CentringPresetBook.Remove(_s.Settings.CentringPresets, name);
         _s.Settings.Save();
         RefreshPresetList();
@@ -794,7 +811,7 @@ public partial class SettingsWindow : Window
     {
         var leftovers = VirtualPadText.Leftovers(_pads);
         if (leftovers.Count == 0) return;
-        if (MessageBox.Show(this, $"Remove {leftovers.Count} leftover virtual controller{(leftovers.Count == 1 ? "" : "s")} from Device Manager?\n\n" +
+        if (ThemedMessageBox.Show(this, $"Remove {leftovers.Count} leftover virtual controller{(leftovers.Count == 1 ? "" : "s")} from Device Manager?\n\n" +
                                   "They are not plugged in. Windows will ask for administrator permission.",
                 "Remove leftovers", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
 
@@ -842,7 +859,7 @@ public partial class SettingsWindow : Window
         var all = _s.Devices.ExtraDevices.ToList();
         if (all.Count == 0) return;
         DeviceMap target = ExtraList.SelectedIndex >= 0 && ExtraList.SelectedIndex < all.Count ? all[ExtraList.SelectedIndex] : all[^1];
-        if (MessageBox.Show(this, $"Remove \"{target.Name}\"? Rules in profiles that use {target.Name}.… will stop working.", "Remove device",
+        if (ThemedMessageBox.Show(this, $"Remove \"{target.Name}\"? Rules in profiles that use {target.Name}.… will stop working.", "Remove device",
                 MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
 
         bool wasRunning = _s.Service.IsRunning;
@@ -856,6 +873,7 @@ public partial class SettingsWindow : Window
 
     private void Done_Click(object sender, RoutedEventArgs e) => Close();
 }
+
 
 
 

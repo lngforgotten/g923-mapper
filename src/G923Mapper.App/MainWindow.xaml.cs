@@ -349,12 +349,12 @@ public partial class MainWindow : Window
         snap = Service.Latest!; profile = null!; file = "";
         if (!Service.IsRunning || Service.Latest is null)
         {
-            MessageBox.Show(this, "Start the mapper with the wheel connected first, so there is a wheel to listen to.", title, MessageBoxButton.OK, MessageBoxImage.Information);
+            ThemedMessageBox.Show(this, "Start the mapper with the wheel connected first, so there is a wheel to listen to.", title, MessageBoxButton.OK, MessageBoxImage.Information);
             return false;
         }
         if (Store.Get(snap.ProfileName) is not { } p || Store.Files.FirstOrDefault(f => ReferenceEquals(Store.Get(f), p)) is not { } f2)
         {
-            MessageBox.Show(this, "The running profile cannot be changed from here. Choose one on the Profiles tab first.", title, MessageBoxButton.OK, MessageBoxImage.Information);
+            ThemedMessageBox.Show(this, "The running profile cannot be changed from here. Choose one on the Profiles tab first.", title, MessageBoxButton.OK, MessageBoxImage.Information);
             return false;
         }
         profile = p; file = f2;
@@ -628,7 +628,7 @@ public partial class MainWindow : Window
         if (ProfileBox.SelectedItem is not ProfileItem item) return;
         if (Store.Get(item.Key) is not Profile profile)
         {
-            MessageBox.Show(this, "This profile has errors and cannot be opened in the editor. Use More, then Edit JSON file, to fix it first.",
+            ThemedMessageBox.Show(this, "This profile has errors and cannot be opened in the editor. Use More, then Edit JSON file, to fix it first.",
                 "Edit rules", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -664,7 +664,7 @@ public partial class MainWindow : Window
         if (ProfileBox.SelectedItem is not ProfileItem item) return;
         if (Store.Files.Count <= 1)
         {
-            MessageBox.Show(this, "This is the only profile, so it is being kept. Make another profile first (Profiles tab, New profile) and then delete this one.",
+            ThemedMessageBox.Show(this, "This is the only profile, so it is being kept. Make another profile first (Profiles tab, New profile) and then delete this one.",
                 "Delete profile", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
@@ -677,7 +677,7 @@ public partial class MainWindow : Window
         string text = $"Delete the profile \"{item.Key}\"?\n\nIts file is moved to a Deleted profiles folder rather than erased, so you can get it back by moving it into the profiles folder again."
             + (users > 0 ? $"\n\n{users} profile{(users == 1 ? " is" : "s are")} based on this template. {(users == 1 ? "It keeps" : "They keep")} their own copy of it and carry on working." : "")
             + (running ? "\n\nThis is the profile running now; the mapper will switch to another one." : "");
-        if (MessageBox.Show(this, text, "Delete profile", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
+        if (ThemedMessageBox.Show(this, text, "Delete profile", MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No) != MessageBoxResult.Yes) return;
 
         try
         {
@@ -689,7 +689,7 @@ public partial class MainWindow : Window
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, "Could not delete the profile:\n" + ex.Message, "Delete profile", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, "Could not delete the profile:\n" + ex.Message, "Delete profile", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -753,7 +753,7 @@ public partial class MainWindow : Window
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("control.exe", "joy.cpl") { UseShellExecute = true }); }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            MessageBox.Show(this, "Could not open the Windows game controller test:\n" + ex.Message, "Test in Windows", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, "Could not open the Windows game controller test:\n" + ex.Message, "Test in Windows", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -761,7 +761,7 @@ public partial class MainWindow : Window
     {
         if (!Service.IsRunning || Service.Latest is null)
         {
-            MessageBox.Show(this, "Start the mapper with the wheel connected first, so there is a wheel to listen to.", "Remap all", MessageBoxButton.OK, MessageBoxImage.Information);
+            ThemedMessageBox.Show(this, "Start the mapper with the wheel connected first, so there is a wheel to listen to.", "Remap all", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
         string current = Service.Latest.ProfileName;
@@ -777,12 +777,12 @@ public partial class MainWindow : Window
 
         string text;
         try { text = File.ReadAllText(dlg.FileName); }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Import", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
+        catch (Exception ex) { ThemedMessageBox.Show(this, ex.Message, "Import", MessageBoxButton.OK, MessageBoxImage.Warning); return; }
 
         var result = ProfileLoader.Parse(text, _s.Devices);
         if (!result.Ok)
         {
-            MessageBox.Show(this, "That file is not a valid profile:\n\n" + string.Join("\n", result.Errors.Take(8)),
+            ThemedMessageBox.Show(this, "That file is not a valid profile:\n\n" + string.Join("\n", result.Errors.Take(8)),
                 "Import", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
@@ -790,7 +790,7 @@ public partial class MainWindow : Window
         string key = Slug(System.IO.Path.GetFileNameWithoutExtension(dlg.FileName));
         string file = key + ".json";
         string path = System.IO.Path.Combine(_s.ProfileDir, file);
-        if (File.Exists(path) && MessageBox.Show(this, $"{file} already exists. Replace it?", "Import",
+        if (File.Exists(path) && ThemedMessageBox.Show(this, $"{file} already exists. Replace it?", "Import",
                 MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
 
         File.WriteAllText(path, text);   // the original text is kept, comments included
@@ -832,7 +832,7 @@ public partial class MainWindow : Window
         var templates = Store.Files.Select(f => Store.Get(f)).Where(p => p is { IsTemplate: true }).Select(p => p!).ToList();
         if (templates.Count == 0)
         {
-            MessageBox.Show(this, "There are no templates yet. Use Save as template on a profile you like to make one.", "From template", MessageBoxButton.OK, MessageBoxImage.Information);
+            ThemedMessageBox.Show(this, "There are no templates yet. Use Save as template on a profile you like to make one.", "From template", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
         bool Exists(string name) => Store.Get(name) is not null || File.Exists(System.IO.Path.Combine(_s.ProfileDir, Slug(name) + ".json"));
@@ -846,14 +846,14 @@ public partial class MainWindow : Window
     {
         if (ProfileBox.SelectedItem is not ProfileItem item || Store.Get(item.Key) is not Profile profile)
         {
-            MessageBox.Show(this, "Choose a profile that loads without errors first.", "Save as template", MessageBoxButton.OK, MessageBoxImage.Information);
+            ThemedMessageBox.Show(this, "Choose a profile that loads without errors first.", "Save as template", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
         string? name = Prompt.Ask(this, "Save as template", "Name for the new template. It keeps this profile's settings and rules, with no game attached.", profile.Name + " template")?.Trim();
         if (string.IsNullOrEmpty(name)) return;
         if (Store.Get(name) is not null || File.Exists(System.IO.Path.Combine(_s.ProfileDir, Slug(name) + ".json")))
         {
-            MessageBox.Show(this, "A profile or template with that name already exists. Choose another name.", "Save as template", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, "A profile or template with that name already exists. Choose another name.", "Save as template", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         SaveNewProfile(Templates.SaveAsTemplate(profile, name));
@@ -884,17 +884,17 @@ public partial class MainWindow : Window
         if (ProfileBox.SelectedItem is not ProfileItem item || Store.Get(item.Key) is not { Parent: not null } profile) return;
         if (FindTemplate(profile.Parent!.Name) is not { } template)
         {
-            MessageBox.Show(this, $"The template \"{profile.Parent.Name}\" is not in the profiles folder any more, so there is nothing to update from.", "Update from template", MessageBoxButton.OK, MessageBoxImage.Information);
+            ThemedMessageBox.Show(this, $"The template \"{profile.Parent.Name}\" is not in the profiles folder any more, so there is nothing to update from.", "Update from template", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
         int own = Templates.Diff(profile).Count;
-        if (MessageBox.Show(this,
+        if (ThemedMessageBox.Show(this,
                 $"Update \"{profile.Name}\" from the template \"{template.Name}\"?\n\nThe template has changed. The changes are applied to this profile; the {own} thing{(own == 1 ? "" : "s")} it does its own way {(own == 1 ? "is" : "are")} kept. The old version stays in Earlier versions.",
                 "Update from template", MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.OK) != MessageBoxResult.OK) return;
         ProfileLoadResult result = Templates.ApplyUpdate(profile, template, _s.Devices);
         if (!result.Ok)
         {
-            MessageBox.Show(this, "The updated profile would not be valid, so nothing was changed:\n\n" + string.Join("\n", result.Errors.Take(6)), "Update from template", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, "The updated profile would not be valid, so nothing was changed:\n\n" + string.Join("\n", result.Errors.Take(6)), "Update from template", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         File.WriteAllText(System.IO.Path.Combine(_s.ProfileDir, item.File), ProfileWriter.ToJson(result.Profile!));
@@ -923,7 +923,7 @@ public partial class MainWindow : Window
     {
         if (ProfileBox.SelectedItem is not ProfileItem item || Store.Get(item.Key) is not Profile profile)
         {
-            MessageBox.Show(this, "Choose a profile that loads without errors first.", "Copy profile", MessageBoxButton.OK, MessageBoxImage.Information);
+            ThemedMessageBox.Show(this, "Choose a profile that loads without errors first.", "Copy profile", MessageBoxButton.OK, MessageBoxImage.Information);
             return;
         }
         DeviceMap? calibration = withCalibration ? _s.Devices.Resolve(profile.Device, Service.WheelUsbIds) : null;
@@ -931,7 +931,7 @@ public partial class MainWindow : Window
         try { Clipboard.SetText(text); }
         catch (System.Runtime.InteropServices.ExternalException ex)
         {
-            MessageBox.Show(this, "Windows would not let the clipboard be used just now: " + ex.Message, "Copy profile", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, "Windows would not let the clipboard be used just now: " + ex.Message, "Copy profile", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         string edition = calibration is null ? "" : $", with the {WheelEditions.Label(WheelEditions.Of(calibration))} calibration";
@@ -946,14 +946,14 @@ public partial class MainWindow : Window
         try { text = Clipboard.ContainsText() ? Clipboard.GetText() : ""; }
         catch (System.Runtime.InteropServices.ExternalException ex)
         {
-            MessageBox.Show(this, "Windows would not let the clipboard be used just now: " + ex.Message, "Paste profile", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, "Windows would not let the clipboard be used just now: " + ex.Message, "Paste profile", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
         ShareImport import = ProfileShare.Import(text, _s.Devices);
         if (!import.Ok)
         {
-            MessageBox.Show(this, "Nothing was imported.\n\n" + string.Join("\n", import.Errors.Take(6)), "Paste profile", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, "Nothing was imported.\n\n" + string.Join("\n", import.Errors.Take(6)), "Paste profile", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
 
@@ -985,7 +985,7 @@ public partial class MainWindow : Window
             File.Copy(System.IO.Path.Combine(_s.ProfileDir, item.File), dlg.FileName, overwrite: true);
             AppendLog($"Exported {item.File}.");
         }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "Export", MessageBoxButton.OK, MessageBoxImage.Warning); }
+        catch (Exception ex) { ThemedMessageBox.Show(this, ex.Message, "Export", MessageBoxButton.OK, MessageBoxImage.Warning); }
     }
 
     private void OpenFolder()
@@ -1045,4 +1045,5 @@ public partial class MainWindow : Window
         base.OnClosed(e);
     }
 }
+
 

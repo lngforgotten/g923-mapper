@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
 
@@ -14,7 +14,7 @@ internal static class SafetyPrompts
     public static bool ConfirmStandard(Window owner, AppSettings? settings)
     {
         if (settings?.WarnedAboutStandard == true) return true;
-        var answer = MessageBox.Show(owner,
+        var answer = ThemedMessageBox.Show(owner,
             "Standard mode allows extras such as keyboard output, which synthetic key presses can look like automation to anti-cheat. " +
             "It is meant for offline and single-player games. Do not use it for a game with online play or anti-cheat (for example GTA Online).\n\n" +
             "Switch this profile to Standard?",
@@ -47,3 +47,4 @@ internal static class Prompt
         return win.ShowDialog() == true ? box.Text : null;
     }
 }
+

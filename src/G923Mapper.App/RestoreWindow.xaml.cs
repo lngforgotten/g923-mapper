@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -53,7 +53,7 @@ public partial class RestoreWindow : Window
         if (Versions.SelectedItem is not Item item) return;
         if (!ProfileHistory.Restore(item.Entry, _profilePath, AppSettings.HistoryDir))
         {
-            MessageBox.Show(this, "That version could not be restored.", "Restore", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, "That version could not be restored.", "Restore", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         Restored = true;
@@ -62,3 +62,4 @@ public partial class RestoreWindow : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 }
+

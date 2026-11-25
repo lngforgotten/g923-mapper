@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
@@ -100,12 +100,12 @@ public partial class HealthWindow : Window
         {
             System.IO.File.WriteAllText(dlg.FileName, BuildReport(), System.Text.Encoding.UTF8);
             AppLog.Info("Health report saved.");
-            MessageBox.Show(this, "Report saved. It lists the findings above and the recent log lines, and contains no personal files.",
+            ThemedMessageBox.Show(this, "Report saved. It lists the findings above and the recent log lines, and contains no personal files.",
                 "Health report", MessageBoxButton.OK, MessageBoxImage.Information);
         }
         catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, $"Could not save the report:\n{ex.Message}", "Health report", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, $"Could not save the report:\n{ex.Message}", "Health report", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 
@@ -129,3 +129,4 @@ public partial class HealthWindow : Window
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 }
+

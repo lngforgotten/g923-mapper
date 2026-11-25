@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.IO;
 using System.Linq;
 using System.Windows;
@@ -62,7 +62,7 @@ public partial class KeyMapWindow : Window
     {
         base.OnClosing(e);
         if (e.Cancel || Changed || _closingConfirmed || (FromBox.Text == _openedFrom && KeyBox.Text == _openedKey)) return;
-        var answer = MessageBox.Show(this, "You have chosen something that is not saved. Close without saving it?", "Unsaved changes",
+        var answer = ThemedMessageBox.Show(this, "You have chosen something that is not saved. Close without saving it?", "Unsaved changes",
             MessageBoxButton.YesNo, MessageBoxImage.Warning, MessageBoxResult.No);
         if (answer == MessageBoxResult.Yes) _closingConfirmed = true; else e.Cancel = true;
     }
@@ -159,13 +159,13 @@ public partial class KeyMapWindow : Window
         string json = ProfileWriter.ToJson(profile);
         if (!ProfileLoader.Parse(json, _s.Devices).Ok)
         {
-            MessageBox.Show(this, "That would make the profile invalid, so it was not saved.", "Key or mouse mapping", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, "That would make the profile invalid, so it was not saved.", "Key or mouse mapping", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         try { File.WriteAllText(_path, json); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            MessageBox.Show(this, "Could not save: " + ex.Message, "Key or mouse mapping", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, "Could not save: " + ex.Message, "Key or mouse mapping", MessageBoxButton.OK, MessageBoxImage.Warning);
             return false;
         }
         Changed = true;
@@ -201,12 +201,12 @@ public partial class KeyMapWindow : Window
         KeyOutputStatus status = KeyMappings.Status(copy);
         if (status.State == KeyOutput.Blocked)
         {
-            MessageBox.Show(this, $"Keys and mouse can never be sent for this profile: {status.Reason}.\n\nNothing was saved.", "Key or mouse mapping", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(this, $"Keys and mouse can never be sent for this profile: {status.Reason}.\n\nNothing was saved.", "Key or mouse mapping", MessageBoxButton.OK, MessageBoxImage.Warning);
             return;
         }
         if (status.State == KeyOutput.NeedsEnabling)
         {
-            var answer = MessageBox.Show(this,
+            var answer = ThemedMessageBox.Show(this,
                 $"Keys and mouse are switched off for this profile ({status.Reason}).\n\nTurn them on (the profile's safety becomes Standard)? Only do this for offline and single-player games: some games treat simulated keys as cheating.",
                 "Key or mouse mapping", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No);
             if (answer != MessageBoxResult.Yes) return;
@@ -229,3 +229,4 @@ public partial class KeyMapWindow : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 }
+

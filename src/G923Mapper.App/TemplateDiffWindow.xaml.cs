@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows;
@@ -68,7 +68,7 @@ public partial class TemplateDiffWindow : Window
 
     private void ResetAll_Click(object sender, RoutedEventArgs e)
     {
-        if (MessageBox.Show(this, "Put everything back to what the template has? The profile keeps its name, game and notes.", "Reset everything",
+        if (ThemedMessageBox.Show(this, "Put everything back to what the template has? The profile keeps its name, game and notes.", "Reset everything",
                 MessageBoxButton.OKCancel, MessageBoxImage.Question, MessageBoxResult.Cancel) != MessageBoxResult.OK) return;
         foreach (TemplateDiff d in _current().ToList()) if (!_reset(d)) break;
         Refresh();
@@ -76,3 +76,4 @@ public partial class TemplateDiffWindow : Window
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 }
+

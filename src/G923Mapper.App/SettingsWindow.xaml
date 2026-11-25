@@ -93,6 +93,8 @@
                         <CheckBox x:Name="ModeBuzzBox" Margin="22,8,0,0" Checked="ModeOptions_Changed" Unchecked="ModeOptions_Changed">
                             <TextBlock TextWrapping="Wrap" Text="Buzz the wheel when the mode changes (once for the first mode, twice for the second, and so on)" />
                         </CheckBox>
+                        <TextBlock x:Name="BuzzNote" Style="{StaticResource Hint}" Margin="44,2,0,0" Visibility="Collapsed" TextWrapping="Wrap"
+                                   Text="Switched off because force feedback is off. The buzz is made by the wheel's motors, so tick &quot;Shake the wheel when the game rumbles&quot; under Force feedback to use it." />
                         <CheckBox x:Name="ModeToastBox" Content="Show a notification when the mode changes" Margin="22,6,0,0"
                                   Checked="ModeOptions_Changed" Unchecked="ModeOptions_Changed" />
                         <TextBlock Text="Keyboard and mouse shortcuts for modes (for every profile that has none of its own)" FontWeight="SemiBold" Margin="0,16,0,0" TextWrapping="Wrap" />
@@ -164,6 +166,8 @@
                     <StackPanel>
                         <TextBlock Text="FORCE FEEDBACK" Style="{StaticResource SectionTitle}" />
                         <CheckBox x:Name="FfbBox" Content="Shake the wheel when the game rumbles" Checked="Ffb_Changed" Unchecked="Ffb_Changed" />
+                        <TextBlock x:Name="FfbOffNote" Style="{StaticResource Hint}" Margin="22,4,0,0" Visibility="Collapsed" TextWrapping="Wrap"
+                                   Text="Force feedback is off, so the app does not take hold of the wheel: no game rumble, no centring spring or curve, no friction, and no buzz when the mode changes. The sliders below have no effect until it is ticked." />
                         <Grid Margin="0,14,0,0">
                             <Grid.ColumnDefinitions><ColumnDefinition Width="130" /><ColumnDefinition Width="*" /><ColumnDefinition Width="48" /></Grid.ColumnDefinitions>
                             <TextBlock Text="Rumble strength" VerticalAlignment="Center" />

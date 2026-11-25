@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -174,7 +174,8 @@ public partial class DevicesPanel : UserControl
         try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("control.exe", "joy.cpl") { UseShellExecute = true }); }
         catch (Exception ex) when (ex is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            MessageBox.Show(Window.GetWindow(this), "Could not open the Windows game controller test:\n" + ex.Message, "Test in Windows", MessageBoxButton.OK, MessageBoxImage.Warning);
+            ThemedMessageBox.Show(Window.GetWindow(this), "Could not open the Windows game controller test:\n" + ex.Message, "Test in Windows", MessageBoxButton.OK, MessageBoxImage.Warning);
         }
     }
 }
+
