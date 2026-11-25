@@ -70,6 +70,8 @@ public sealed class AppSettings
     public HotkeySettings Hotkey { get; set; } = new();
     /// <summary>The optional shortcut that moves a profile to its next mode (Shooting, Driving...). Off by default.</summary>
     public HotkeySettings ModeHotkey { get; set; } = new() { Combo = "Ctrl+Alt+F11" };
+    /// <summary>Keyboard keys and mouse buttons that switch modes (next, previous, or a mode by name). Empty = none, and nothing is watched.</summary>
+    public System.Collections.Generic.List<ModeShortcut> ModeShortcuts { get; set; } = new();
     /// <summary>Buzz the wheel when the mode changes: once for the first mode, twice for the second and so on.</summary>
     public bool ModeBuzz { get; set; } = true;
     /// <summary>Show a Windows notification when the mode changes.</summary>
@@ -152,6 +154,7 @@ public sealed class AppSettings
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 }
+
 
 
 

@@ -122,6 +122,7 @@ public partial class App : Application
 
             // The optional shortcut that pauses and resumes the controller, and the "release when the game is not in front" option.
             _hotkeys = new HotkeyManager(_hwnd, () => _window.Dispatcher.BeginInvoke(TogglePause));
+            _modeInputs = new ModeShortcutListener(_hwnd, action => service.RequestMode(action));    // watches only while shortcuts are set
             _modeHotkeys = new HotkeyManager(_hwnd, () => service.RequestMode("Next"), 0x6924);   // the loop does the switching, from any thread
             service.ModeChanged += OnModeChanged;
             _services.RestartForUpdate = RestartForUpdate;
@@ -275,6 +276,7 @@ public partial class App : Application
 
     private HotkeyManager? _hotkeys;
     private HotkeyManager? _modeHotkeys;
+    private ModeShortcutListener? _modeInputs;
     private AutoUpdate? _autoUpdate;
 
     // ---------------------------------------------------------------- updating itself
@@ -485,6 +487,7 @@ public partial class App : Application
     {
         s.Service.ModeBuzz = s.Settings.ModeBuzz;
         s.ModeHotkeyProblem = "";
+        _modeInputs?.Apply(s.Settings.ModeShortcuts);
         if (_modeHotkeys is null) return;
         if (!s.Settings.ModeHotkey.Enabled) { _modeHotkeys.Unregister(); return; }
         if (!Hotkey.TryParse(s.Settings.ModeHotkey.Combo, out Hotkey? key, out string? why))
@@ -686,6 +689,7 @@ public partial class App : Application
             _services?.Switcher.Dispose();
             _hotkeys?.Dispose();
             _modeHotkeys?.Dispose();
+            _modeInputs?.Dispose();
             _autoUpdate?.Dispose();
             _services?.Service.Stop();       // removes the virtual pad and releases any held keys
             RestoreWheelOnExit();
@@ -701,4 +705,5 @@ public partial class App : Application
         });
     }
 }
+
 

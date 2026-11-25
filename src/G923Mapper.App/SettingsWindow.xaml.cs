@@ -36,6 +36,7 @@ public partial class SettingsWindow : Window
         ModeHotkeyCombo.Text = _s.Settings.ModeHotkey.Combo;
         ModeHotkeyMessage.Text = !_s.Settings.ModeHotkey.Enabled ? "" : _s.ModeHotkeyProblem.Length > 0 ? _s.ModeHotkeyProblem : $"Active: {_s.Settings.ModeHotkey.Combo}";
         ModeBuzzBox.IsChecked = _s.Settings.ModeBuzz;
+        RefreshShortcutList();
         ModeToastBox.IsChecked = _s.Settings.ModeToast;
         HotkeyBox.IsChecked = _s.Settings.Hotkey.Enabled;
         CombosBox.IsChecked = _s.Settings.Combos.Enabled;
@@ -277,6 +278,55 @@ public partial class SettingsWindow : Window
         _s.Settings.Save();
         _s.ApplyInputOptions?.Invoke();
         ModeHotkeyMessage.Text = !_s.Settings.ModeHotkey.Enabled ? "" : _s.ModeHotkeyProblem.Length > 0 ? _s.ModeHotkeyProblem : $"Active: {_s.Settings.ModeHotkey.Combo}";
+    }
+
+    // ---------------------------------------------------------------- keyboard and mouse shortcuts for modes
+
+    private void RefreshShortcutList()
+    {
+        ModeShortcutBox.ItemsSource = _s.Settings.ModeShortcuts.Select(m => m.Describe()).ToList();
+        RemoveShortcutButton.IsEnabled = false;
+        var (_, problems) = ModeShortcutList.Check(_s.Settings.ModeShortcuts);
+        ModeShortcutMessage.Text = problems.Count == 0 ? "" : "Not used: " + string.Join(" ", problems);
+    }
+
+    private void ModeShortcutList_Changed(object sender, SelectionChangedEventArgs e) => RemoveShortcutButton.IsEnabled = ModeShortcutBox.SelectedIndex >= 0;
+
+    private void AddShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        var dlg = new ModeShortcutWindow(this);
+        if (dlg.ShowDialog() != true || dlg.Result is not { } made) return;
+
+        InputTrigger.TryParse(made.Trigger, out var trigger, out _);
+        if (_s.Settings.ModeShortcuts.Count >= G923Mapper.ModeShortcutList.MaxShortcuts)
+        {
+            ModeShortcutMessage.Text = $"At most {G923Mapper.ModeShortcutList.MaxShortcuts} shortcuts. Remove one first.";
+            return;
+        }
+        if (_s.Settings.ModeShortcuts.Any(m => InputTrigger.TryParse(m.Trigger, out var other, out _) && other == trigger))
+        {
+            ModeShortcutMessage.Text = $"{trigger} is already used by another shortcut.";
+            return;
+        }
+        if (_s.Settings.ModeHotkey.Enabled && Hotkey.TryParse(_s.Settings.ModeHotkey.Combo, out var old, out _) && old!.ToString().Equals(made.Trigger, StringComparison.OrdinalIgnoreCase))
+        {
+            ModeShortcutMessage.Text = $"{made.Trigger} is already the older \"next mode\" shortcut above; it would switch twice.";
+            return;
+        }
+        _s.Settings.ModeShortcuts.Add(made);
+        _s.Settings.Save();
+        _s.ApplyInputOptions?.Invoke();
+        RefreshShortcutList();
+    }
+
+    private void RemoveShortcut_Click(object sender, RoutedEventArgs e)
+    {
+        int i = ModeShortcutBox.SelectedIndex;
+        if (i < 0 || i >= _s.Settings.ModeShortcuts.Count) return;
+        _s.Settings.ModeShortcuts.RemoveAt(i);
+        _s.Settings.Save();
+        _s.ApplyInputOptions?.Invoke();
+        RefreshShortcutList();
     }
 
     private void ModeOptions_Changed(object sender, RoutedEventArgs e)
@@ -790,5 +840,7 @@ public partial class SettingsWindow : Window
 
     private void Done_Click(object sender, RoutedEventArgs e) => Close();
 }
+
+
 
 
