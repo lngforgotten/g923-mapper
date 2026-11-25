@@ -77,6 +77,7 @@ internal sealed class TrayIcon : IDisposable
     {
         _glyph = AppIcon.Create();
         var menu = new WinForms.ContextMenuStrip();
+        TrayTheme.Apply(menu);          // the app's own colours, not plain Windows ones
         var openItem = new WinForms.ToolStripMenuItem("Open G923 Mapper") { Font = new Font(WinForms.Control.DefaultFont, FontStyle.Bold) };
         openItem.Click += (_, _) => open();
         _toggle = new WinForms.ToolStripMenuItem("Stop");

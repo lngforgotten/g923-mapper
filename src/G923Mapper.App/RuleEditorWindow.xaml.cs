@@ -663,9 +663,17 @@ public partial class RuleEditorWindow : Window
 
     private void ModeShortcuts_Click(object sender, RoutedEventArgs e)
     {
-        var dlg = new ProfileShortcutsWindow(this, _modeShortcuts, _settings?.ModeShortcuts.Count ?? 0);
+        // Wheel buttons and pedals that switch modes are the profile's own rules sending to Mode:...; they are listed here as well.
+        var wheelRules = _rows.Select(r => r.Rule).Where(r => r.To.TrimStart().StartsWith("Mode:", StringComparison.OrdinalIgnoreCase)).ToList();
+        var dlg = new ProfileShortcutsWindow(this, _modeShortcuts, _settings?.ModeShortcuts.Count ?? 0, wheelRules, _latest, Device);
         if (dlg.ShowDialog() != true) return;
         _modeShortcuts = CopyShortcuts(dlg.Result);
+
+        // Take out the Mode: rules that were removed, keep the ones that are still there as they were, and add the new ones.
+        foreach (RuleRow row in _rows.Where(r => r.Rule.To.TrimStart().StartsWith("Mode:", StringComparison.OrdinalIgnoreCase) && !dlg.WheelRules.Contains(r.Rule)).ToList())
+            _rows.Remove(row);
+        foreach (Rule added in dlg.WheelRules.Where(w => !_rows.Any(r => ReferenceEquals(r.Rule, w))))
+            _rows.Add(new RuleRow(added));
         Revalidate();
     }
     /// <summary>
@@ -1121,5 +1129,6 @@ public partial class RuleEditorWindow : Window
 
     private void Cancel_Click(object sender, RoutedEventArgs e) => DialogResult = false;
 }
+
 
 
