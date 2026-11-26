@@ -398,6 +398,8 @@ public partial class MainWindow : Window
 
     private void UpdateHealth()
     {
+        // A dialog that was open while the app shut down (an update restarting it) still returns into the code that called it.
+        if (Exiting) return;
         var missing = Service.IsRunning ? Service.ExtraStatus.Where(x => !x.Connected).Select(x => x.Name).ToList() : new List<string>();
         var items = HealthEvaluator.Evaluate(HealthProbe.Gather(Service, Store, _s.HidHide, _s.WheelHidden, missing, _s.IgnoredTips));
         HealthLevel level = HealthEvaluator.Overall(items);
@@ -419,6 +421,7 @@ public partial class MainWindow : Window
     {
         var settings = new SettingsWindow(_s) { Owner = this };
         settings.ShowDialog();
+        if (Exiting) return;   // "Install now" in Settings restarts the app from inside the dialog
         RefreshProfiles();
         UpdateHealth();
         if (settings.OpenSetupRequested) ShowSetup();
