@@ -81,6 +81,7 @@ public partial class MainWindow : Window
             AppendLog(r.Ok ? $"{file} reloaded." : $"{file} rejected: {r.Errors.FirstOrDefault()}");
             RefreshProfiles();
         });
+        Store.Removed += _ => Dispatcher.BeginInvoke(RefreshProfiles);
         ThemeManager.Changed += () => Dispatcher.BeginInvoke(() => { ShowIssues(); UpdateHealth(); });
 
         RefreshProfiles();

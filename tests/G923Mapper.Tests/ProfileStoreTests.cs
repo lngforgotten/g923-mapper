@@ -120,6 +120,22 @@ public sealed class ProfileStoreTests : IDisposable
     }
 
     [Fact]
+    public void Removing_a_file_is_announced_once_so_the_profile_list_can_refresh()
+    {
+        string path = Write("p.json", Json("p", 0));
+        using var store = Open();
+        var removed = new List<string>();
+        store.Removed += f => { lock (removed) removed.Add(f); };
+
+        File.Delete(path);
+        store.Reload("p.json");   // the app reloads at once...
+        Thread.Sleep(300);        // ...and the file watcher follows
+
+        lock (removed) Assert.Equal(["p.json"], removed);
+        Assert.Empty(store.Files);
+    }
+
+    [Fact]
     public void Writes_starter_profiles_without_overwriting_existing_ones()
     {
         Write("default.json", "mine");

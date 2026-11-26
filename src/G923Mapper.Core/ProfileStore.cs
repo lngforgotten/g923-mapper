@@ -24,6 +24,9 @@ public sealed class ProfileStore : IDisposable
     /// <summary>Raised after a (re)load attempt of one file, on a thread-pool thread. Args: file name, result.</summary>
     public event Action<string, ProfileLoadResult>? Loaded;
 
+    /// <summary>Raised once when a loaded file is dropped because it was deleted, moved or renamed away. Arg: file name. Any thread.</summary>
+    public event Action<string>? Removed;
+
     /// <summary>Delay after the last write event before reloading (editors fire several events per save).</summary>
     public TimeSpan Debounce { get; init; } = TimeSpan.FromMilliseconds(250);
 
@@ -96,8 +99,10 @@ public sealed class ProfileStore : IDisposable
         ProfileLoadResult result;
         if (!File.Exists(path))
         {
-            lock (_lock) { _byFile.Remove(file); _debounce.Remove(file); }
+            bool dropped;
+            lock (_lock) { dropped = _byFile.Remove(file); _debounce.Remove(file); }
             Interlocked.Increment(ref _version);
+            if (dropped) Removed?.Invoke(file);
             return;
         }
 
