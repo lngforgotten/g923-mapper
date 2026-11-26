@@ -97,7 +97,8 @@ public static class ProfileShare
     private static readonly HashSet<string> RuleFields = new(StringComparer.OrdinalIgnoreCase)
         { "from", "to", "curve", "exponent", "points", "deadzone", "antideadzone", "invert", "threshold", "mode", "pulsems", "range", "part", "smooth", "expr", "turbo", "turbohz" };
     private static readonly HashSet<string> OutputFields = new(StringComparer.OrdinalIgnoreCase) { "keyboard", "secondpad", "pad", "turbo" };
-    private static readonly HashSet<string> ForceFields = new(StringComparer.OrdinalIgnoreCase) { "rumble", "spring", "friction", "motors" };
+    private static readonly HashSet<string> ForceFields = new(StringComparer.OrdinalIgnoreCase) 
+        { "rumble", "spring", "friction", "motors", "centringstyle", "centredegrees", "peakdegrees", "lighteningpercent", "dampingpercent" };
     private static readonly HashSet<string> MatchFields = new(StringComparer.OrdinalIgnoreCase) { "exe" };
     private static readonly HashSet<string> TopFields = new(StringComparer.OrdinalIgnoreCase) { "g923mapper", "edition", "profile", "calibration" };
 

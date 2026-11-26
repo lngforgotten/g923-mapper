@@ -801,7 +801,10 @@ public partial class SettingsWindow : Window
         PadsStatus.Text = $"{connected} connected, {leftovers.Count} leftover." +
                           (connected > Math.Max(1, _s.Service.IsRunning ? 1 : 0) && _s.Instance == 1 && !_s.Settings.AllowMultipleInstances
                               ? "  More than this app's one: another program is making a virtual controller too." : "");
-        PadsList.Text = found.Count == 0 ? "None." : string.Join("\n", found.Select(p => $"{p.InstanceId.Split('\\').Last(),-6} {(p.Connected ? "connected" : "leftover")}"));
+        IgnoredTips ignored = _s.IgnoredTips.ReadFor(found);
+        PadsList.Text = found.Count == 0 ? "None." : string.Join("\n", found.Select(p =>
+            $"{p.InstanceId.Split('\\').Last(),-6} {(p.Connected ? "connected" : ignored.IsIgnored(p.InstanceId) ? "leftover (tip ignored)" : "leftover")}"));
+
         PadsRemoveButton.IsEnabled = leftovers.Count > 0;
     }
 
@@ -809,18 +812,17 @@ public partial class SettingsWindow : Window
 
     private async void PadsRemove_Click(object sender, RoutedEventArgs e)
     {
-        var leftovers = VirtualPadText.Leftovers(_pads);
-        if (leftovers.Count == 0) return;
-        if (ThemedMessageBox.Show(this, $"Remove {leftovers.Count} leftover virtual controller{(leftovers.Count == 1 ? "" : "s")} from Device Manager?\n\n" +
-                                  "They are not plugged in. Windows will ask for administrator permission.",
-                "Remove leftovers", MessageBoxButton.YesNo, MessageBoxImage.Question, MessageBoxResult.No) != MessageBoxResult.Yes) return;
-
+        var ids = VirtualPadText.Leftovers(_pads).Select(p => p.InstanceId).ToList();
+        if (ids.Count == 0) return;
         PadsRemoveButton.IsEnabled = false;
-        PadsMessage.Text = "Waiting for permission…";
-        var ids = leftovers.Select(p => p.InstanceId).ToList();
-        HidHideResult result = await Task.Run(() => new VirtualPadClient().Remove(ids));
-        PadsMessage.Text = result.Success ? "Done." : result.Message;
-        HealthProbe.RefreshVirtualPads();
+        string? outcome = await LeftoverRemoval.ConfirmAndRemove(this, ids, _s.IgnoredTips, () => PadsMessage.Text = "Waiting for permission…");
+        if (outcome is not null) PadsMessage.Text = outcome;
+        RefreshPads();
+    }
+
+    private void IgnoredTips_Click(object sender, RoutedEventArgs e)
+    {
+        new IgnoredTipsWindow(_s.IgnoredTips) { Owner = this }.ShowDialog();
         RefreshPads();
     }
 

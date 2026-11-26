@@ -2,7 +2,8 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:G923Mapper.App"
-        Title="Edit profile" Width="1040" Height="860" MinWidth="900" MinHeight="680"
+        xmlns:s="clr-namespace:System;assembly=System.Runtime"
+        Title="Edit profile" Width="1200" Height="980" MinWidth="900" MinHeight="680"
         WindowStartupLocation="CenterOwner" Background="{DynamicResource WindowBack}" FontFamily="Segoe UI" FontSize="13"
         UseLayoutRounding="True" SnapsToDevicePixels="True">
     <Window.Resources>
@@ -21,20 +22,44 @@
         <Style TargetType="ComboBox" BasedOn="{StaticResource {x:Type ComboBox}}">
             <Setter Property="Padding" Value="6,4" />
         </Style>
+        <!-- A box of settings that belong together, in the rule form. -->
+        <Style x:Key="Group" TargetType="Border">
+            <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="Padding" Value="12,8" />
+            <Setter Property="Margin" Value="0,0,0,10" />
+        </Style>
+        <Style x:Key="GroupCaption" TargetType="TextBlock" BasedOn="{StaticResource Caption}">
+            <Setter Property="Margin" Value="0,0,0,8" />
+        </Style>
+        <Style x:Key="TopLabel" TargetType="TextBlock" BasedOn="{StaticResource FieldLabel}">
+            <Setter Property="Margin" Value="0,0,0,3" />
+        </Style>
+        <!-- The explanations: shown on hover, and read out by screen readers. -->
+        <s:String x:Key="HelpExponent">Output = input to the power of this. 2 gives a softer start, 1 is linear.</s:String>
+        <s:String x:Key="HelpPoints">Pairs of input,output from 0 to 1, left to right, for example: 0,0 0.5,0.2 1,1</s:String>
+        <s:String x:Key="HelpDeadzone">A percentage of travel, 0 to 99 (for example 4). Input at or below this counts as zero. Needed in front of an anti-deadzone.</s:String>
+        <s:String x:Key="HelpAnti">A percentage, for example 6. Skips the game's own deadzone: any movement starts at this much output.</s:String>
+        <s:String x:Key="HelpSmooth">Optional. Glides the stick or trigger towards where the input is, with this time constant. It takes out jitter and sudden jumps but adds a little delay, so for steering keep it small (0 = off).</s:String>
+        <s:String x:Key="HelpThreshold">The trigger point, for button, key and mouse outputs: press once the input reaches this percentage of its travel. 35 is about a third of the way down; 50 if empty. Negative (for example -50) = at or below, for the wheel turning left.</s:String>
+        <s:String x:Key="HelpMode">Hold: pressed while held. Toggle: each press flips it. Pulse: one short press per physical press.</s:String>
+        <s:String x:Key="HelpPart">Use only one half of the axis, stretched to full range. Positive half = the wheel turned right (or the upper half of a pedal axis); negative half = turned left (or the lower half). Handy for splitting one combined axis into two controls.</s:String>
+        <s:String x:Key="HelpRange">Degrees of wheel travel that give full stick (wheel only). Empty = the whole lock-to-lock rotation.</s:String>
+        <s:String x:Key="HelpExpression">Optional. Replaces the input with a calculation: x is the input above, other names are other inputs. For example max(0, x) takes the positive half of a combined pedal axis, and max(0, -x) the other half. Also + - * / ( ), min, max, abs, clamp, sqrt, pow.</s:String>
     </Window.Resources>
 
-    <Grid Margin="16">
+    <Grid x:Name="Root" Margin="16" SizeChanged="Layout_SizeChanged">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="12" />
             <RowDefinition Height="*" />
             <RowDefinition Height="12" />
-            <RowDefinition Height="110" />
-            <RowDefinition Height="12" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Profile fields -->
+        <!-- Profile fields. The rules come first: in a window too short for both, this block scrolls (see Layout_SizeChanged). -->
+        <ScrollViewer x:Name="HeaderScroll" VerticalScrollBarVisibility="Auto" Focusable="False">
         <Border Style="{StaticResource Card}" Padding="16,12">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -68,14 +93,15 @@
                               ToolTip="Also show the game a second virtual controller. Rules whose output starts with P2: (listed once this is ticked) feed it, for example the pedals on their own controller." />
                     <TextBlock x:Name="PadHint" TextWrapping="Wrap" Style="{StaticResource Hint}" Margin="14,0,0,0" VerticalAlignment="Center" />
                 </WrapPanel>
-                <WrapPanel Grid.Row="3" Grid.ColumnSpan="6" Margin="0,10,0,0">
+                <StackPanel Grid.Row="3" Grid.ColumnSpan="6" Margin="0,10,0,0">
+                <WrapPanel>
                     <TextBlock Text="Feel" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
                     <CheckBox x:Name="FeelBox" Content="Own force feedback" VerticalAlignment="Center" Checked="Profile_Changed" Unchecked="Profile_Changed"
-                              ToolTip="Tick to give this profile its own rumble strength, centring spring and rumble motors, instead of the ones in Settings. Untick to use the Settings values." />
+                              ToolTip="Tick to give this profile its own rumble, centring, friction and rumble motors, instead of the ones in Settings. Untick to use the Settings values." />
                     <TextBlock Text="Rumble" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="16,0,6,0" />
                     <Slider x:Name="FeelRumble" Width="110" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="Feel_Slider" />
                     <TextBlock x:Name="FeelRumbleText" Width="40" Style="{StaticResource ValueText}" VerticalAlignment="Center" Margin="6,0,0,0" />
-                    <TextBlock Text="Spring" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="12,0,6,0" />
+                    <TextBlock Text="Centring" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="12,0,6,0" />
                     <Slider x:Name="FeelSpring" Width="110" Minimum="0" Maximum="100" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" ValueChanged="Feel_Slider" />
                     <TextBlock x:Name="FeelSpringText" Width="40" Style="{StaticResource ValueText}" VerticalAlignment="Center" Margin="6,0,0,0" />
                     <TextBlock Text="Friction" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="12,0,6,0" />
@@ -84,6 +110,22 @@
                     <ComboBox x:Name="FeelMotors" Width="150" Margin="12,0,0,0" VerticalAlignment="Center" SelectionChanged="Profile_Changed"
                               ToolTip="Which of the game's two rumble motors the wheel plays." />
                 </WrapPanel>
+                <!-- Which kind of centring this feel uses. Only shown while the profile or mode has its own feel. -->
+                <WrapPanel x:Name="FeelCentringRow" Margin="0,8,0,0">
+                    <TextBlock Text="Centring style" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                    <ComboBox x:Name="FeelCentringBox" Width="200" VerticalAlignment="Center" SelectionChanged="FeelCentring_Changed"
+                              AutomationProperties.Name="Centring style"
+                              ToolTip="Straight spring is the wheel's own spring. Curve is a shaped pull that builds, peaks and eases off like a real steering rack." />
+                    <StackPanel x:Name="FeelCurvePanel" Orientation="Horizontal" Margin="12,0,0,0">
+                        <TextBlock Text="Car" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="0,0,8,0" />
+                        <ComboBox x:Name="FeelCarBox" Width="210" VerticalAlignment="Center" SelectionChanged="FeelCar_Changed" AutomationProperties.Name="Car preset"
+                                  ToolTip="A starting point for the shape and strength: the built-in presets and the ones you saved in Settings." />
+                        <Button Content="Adjust curve&#8230;" Style="{StaticResource Secondary}" Padding="10,4" Margin="8,0,0,0" VerticalAlignment="Center" Click="FeelShape_Click" />
+                    </StackPanel>
+                    <TextBlock x:Name="FeelCurveNote" Style="{StaticResource Hint}" Margin="12,0,0,0" VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="420"
+                               Text="Your wheel is not measured yet, so it gets the straight spring. In Settings, set Centring style to Curve and press Measure wheel." />
+                </WrapPanel>
+                </StackPanel>
                 <WrapPanel Grid.Row="4" Grid.ColumnSpan="6" Margin="0,10,0,0">
                     <TextBlock Text="Wheel" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
                     <ComboBox x:Name="HideWheelBox" Width="290" SelectionChanged="Profile_Changed" VerticalAlignment="Center"
@@ -119,17 +161,19 @@
                     <Button x:Name="TemplateMenuButton" Content="Template options" Style="{StaticResource Secondary}" Padding="12,4" Margin="14,0,0,0" Click="TemplateMenu_Click"
                             ToolTip="See what this profile does its own way, put a rule or setting back to the template's, or take in a changed template." />
                 </WrapPanel>
-                <TextBlock Grid.Row="5" Text="Notes" Style="{StaticResource FieldLabel}" Margin="0,10,8,0" VerticalAlignment="Top" />
-                <TextBox x:Name="NotesBox" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="5" Margin="0,10,0,0" Height="50" AcceptsReturn="True" TextWrapping="Wrap"
-                         VerticalScrollBarVisibility="Auto" VerticalContentAlignment="Top" TextChanged="Profile_Changed"
-                         ToolTip="Your own notes about this profile, for example what felt right in the game. Kept in the profile file, its history and exports." />
+                <TextBlock Grid.Row="5" Text="Notes" Style="{StaticResource FieldLabel}" Margin="0,8,8,0" />
+                <!-- One line high on purpose: it still takes several lines, scrolled with the arrow keys or the mouse wheel. -->
+                <TextBox x:Name="NotesBox" Grid.Row="5" Grid.Column="1" Grid.ColumnSpan="5" Margin="0,8,0,0" MaxLines="1" AcceptsReturn="True" TextWrapping="Wrap"
+                         VerticalScrollBarVisibility="Hidden" TextChanged="Profile_Changed"
+                         ToolTip="Your own notes about this profile, for example what felt right in the game. Kept in the profile file, its history and exports. Enter starts a new line; the arrow keys and mouse wheel scroll through them." />
             </Grid>
         </Border>
+        </ScrollViewer>
 
         <!-- Rules and form -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="320" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" />
+                <ColumnDefinition Width="3*" MinWidth="260" MaxWidth="440" /><ColumnDefinition Width="12" /><ColumnDefinition Width="7*" />
             </Grid.ColumnDefinitions>
 
             <Border Style="{StaticResource Card}" Padding="12">
@@ -150,166 +194,171 @@
                 </DockPanel>
             </Border>
 
+            <!-- The selected rule: what to what across the top, then its settings in groups, with the response graph beside them. -->
             <Border Grid.Column="2" Style="{StaticResource Card}">
                 <Grid x:Name="FormRoot">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" /><ColumnDefinition Width="12" /><ColumnDefinition Width="250" />
-                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
 
-                    <ScrollViewer VerticalScrollBarVisibility="Auto">
-                        <Grid Margin="0,0,10,0">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="110" /><ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" /><RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-
-                            <TextBlock Text="From input" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <StackPanel Grid.Column="1" Margin="0,0,0,12">
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <ComboBox x:Name="FromBox" IsEditable="True" SelectionChanged="Form_Changed" />
-                                    <Button x:Name="LearnButton" Grid.Column="1" Content="Learn" Style="{StaticResource Secondary}"
-                                            Margin="8,0,0,0" Padding="14,4" Click="Learn_Click"
-                                            ToolTip="Press a button on the wheel, press a pedal, or turn the wheel, and this fills in the input for you." />
-                                </Grid>
-                                <TextBlock x:Name="LearnHint" Style="{StaticResource Hint}" Visibility="Collapsed" />
-                            </StackPanel>
-
-                            <TextBlock Grid.Row="1" Text="To output" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <ComboBox x:Name="ToBox" Grid.Row="1" Grid.Column="1" IsEditable="True" Margin="0,0,0,12" SelectionChanged="Form_Changed" />
-
-                            <TextBlock Grid.Row="2" Text="Curve" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <ComboBox x:Name="CurveBox" Grid.Row="2" Grid.Column="1" Margin="0,0,0,12" SelectionChanged="Form_Changed" />
-
-                            <TextBlock x:Name="ExpLabel" Grid.Row="3" Text="Exponent" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <StackPanel x:Name="ExpPanel" Grid.Row="3" Grid.Column="1" Margin="0,0,0,12">
-                                <TextBox x:Name="ExpBox" TextChanged="Form_Changed" />
-                                <TextBlock Style="{StaticResource Hint}" Text="Output = input to the power of this. 2 gives a softer start, 1 is linear." />
-                            </StackPanel>
-
-                            <TextBlock x:Name="PointsLabel" Grid.Row="4" Text="Points" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <StackPanel x:Name="PointsPanel" Grid.Row="4" Grid.Column="1" Margin="0,0,0,12">
-                                <TextBox x:Name="PointsBox" TextChanged="Form_Changed" />
-                                <TextBlock Style="{StaticResource Hint}" Text="Pairs of input,output from 0 to 1, left to right, for example: 0,0 0.5,0.2 1,1" />
-                            </StackPanel>
-
-                            <TextBlock Grid.Row="5" Text="Deadzone %" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <StackPanel Grid.Row="5" Grid.Column="1" Margin="0,0,0,12">
-                                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="64" /></Grid.ColumnDefinitions><Slider x:Name="DeadzoneSlider" Minimum="0" Maximum="99" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="0,0,10,0" /><TextBox x:Name="DeadzoneBox" Grid.Column="1" TextChanged="Form_Changed" /></Grid>
-                                <TextBlock Style="{StaticResource Hint}" Text="A percentage of travel, 0 to 99 (for example 4). Input at or below this counts as zero. Needed in front of an anti-deadzone." />
-                            </StackPanel>
-
-                            <TextBlock Grid.Row="6" Text="Anti-deadzone %" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <StackPanel Grid.Row="6" Grid.Column="1" Margin="0,0,0,12">
-                                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="64" /></Grid.ColumnDefinitions><Slider x:Name="AntiSlider" Minimum="0" Maximum="99" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="0,0,10,0" /><TextBox x:Name="AntiBox" Grid.Column="1" TextChanged="Form_Changed" /></Grid>
-                                <TextBlock Style="{StaticResource Hint}" Text="A percentage, for example 6. Skips the game's own deadzone: any movement starts at this much output." />
-                            </StackPanel>
-
-                            <TextBlock Grid.Row="7" Text="Wheel range" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <StackPanel Grid.Row="7" Grid.Column="1" Margin="0,0,0,12">
-                                <TextBox x:Name="RangeBox" TextChanged="Form_Changed" />
-                                <TextBlock Style="{StaticResource Hint}" Text="Degrees of wheel travel that give full stick (wheel only). Empty = the whole lock-to-lock rotation." />
-                            </StackPanel>
-
-                            <TextBlock Grid.Row="8" Text="Invert" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <CheckBox x:Name="InvertBox" Grid.Row="8" Grid.Column="1" Margin="0,2,0,12" VerticalAlignment="Center"
-                                      Content="Flip the direction" Checked="Form_Changed" Unchecked="Form_Changed" />
-
-                            <TextBlock x:Name="ThresholdLabel" Grid.Row="9" Text="Press at %" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <StackPanel x:Name="ThresholdPanel" Grid.Row="9" Grid.Column="1" Margin="0,0,0,12">
-                                <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="64" /></Grid.ColumnDefinitions><Slider x:Name="ThresholdSlider" Minimum="-100" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="0,0,10,0" /><TextBox x:Name="ThresholdBox" Grid.Column="1" TextChanged="Form_Changed" /></Grid>
-                                <TextBlock Style="{StaticResource Hint}" Text="The trigger point, for button, key and mouse outputs: press once the input reaches this percentage of its travel. 35 is about a third of the way down; 50 if empty. Negative (for example -50) = at or below, for the wheel turning left." />
-                            </StackPanel>
-
-                            <TextBlock x:Name="ModeLabel" Grid.Row="10" Text="Button mode" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <StackPanel x:Name="ModePanel" Grid.Row="10" Grid.Column="1" Margin="0,0,0,12">
-                                <ComboBox x:Name="ModeBox" SelectionChanged="Form_Changed" />
-                                <TextBlock Style="{StaticResource Hint}" Text="Hold: pressed while held. Toggle: each press flips it. Pulse: one short press per physical press." />
-                                <StackPanel x:Name="PulsePanel" Orientation="Horizontal" Margin="0,8,0,0">
-                                    <TextBlock Text="Pulse length (ms)" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
-                                    <TextBox x:Name="PulseBox" Width="80" TextChanged="Form_Changed" />
-                                </StackPanel>
-                            </StackPanel>
-
-                            <TextBlock x:Name="TurboLabel" Grid.Row="11" Text="Turbo" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <StackPanel x:Name="TurboPanel" Grid.Row="11" Grid.Column="1" Margin="0,0,0,12">
-                                <StackPanel Orientation="Horizontal">
-                                    <CheckBox x:Name="TurboBox" Content="Press and release repeatedly while held" VerticalAlignment="Center"
-                                              Checked="Form_Changed" Unchecked="Form_Changed" />
-                                    <TextBox x:Name="TurboHzBox" Width="50" Margin="12,0,6,0" TextChanged="Form_Changed" />
-                                    <TextBlock Text="per second" Style="{StaticResource Muted}" VerticalAlignment="Center" />
-                                </StackPanel>
-                                <TextBlock x:Name="TurboHint" Style="{StaticResource Hint}" />
-                            </StackPanel>
-
-                            <TextBlock x:Name="SmoothLabel" Grid.Row="14" Text="Smoothing (ms)" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <StackPanel x:Name="SmoothPanel" Grid.Row="14" Grid.Column="1" Margin="0,0,0,12">
-                                <Grid>
-                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*" /><ColumnDefinition Width="64" /></Grid.ColumnDefinitions>
-                                    <Slider x:Name="SmoothSlider" Minimum="0" Maximum="300" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="0,0,10,0" />
-                                    <TextBox x:Name="SmoothBox" Grid.Column="1" TextChanged="Form_Changed" />
-                                </Grid>
-                                <TextBlock Style="{StaticResource Hint}"
-                                           Text="Optional. Glides the stick or trigger towards where the input is, with this time constant. It takes out jitter and sudden jumps but adds a little delay, so for steering keep it small (0 = off)." />
-                            </StackPanel>
-
-                            <TextBlock Grid.Row="13" Text="Axis part" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <StackPanel Grid.Row="13" Grid.Column="1" Margin="0,0,0,12">
-                                <ComboBox x:Name="PartBox" SelectionChanged="Form_Changed" />
-                                <TextBlock Style="{StaticResource Hint}"
-                                           Text="Use only one half of the axis, stretched to full range. Positive half = the wheel turned right (or the upper half of a pedal axis); negative half = turned left (or the lower half). Handy for splitting one combined axis into two controls." />
-                            </StackPanel>
-
-                            <TextBlock Grid.Row="12" Text="Expression" Style="{StaticResource FieldLabel}" Margin="0,0,0,12" />
-                            <StackPanel Grid.Row="12" Grid.Column="1" Margin="0,0,0,12">
-                                <TextBox x:Name="ExprBox" TextChanged="Form_Changed" FontFamily="Consolas" />
-                                <TextBlock Style="{StaticResource Hint}"
-                                           Text="Optional. Replaces the input with a calculation: x is the input above, other names are other inputs. For example max(0, x) takes the positive half of a combined pedal axis, and max(0, -x) the other half. Also + - * / ( ), min, max, abs, clamp, sqrt, pow." />
-                            </StackPanel>
+                    <StackPanel Margin="0,0,0,12">
+                        <Grid>
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="Auto" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
+                            <TextBlock Text="From" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
+                            <ComboBox x:Name="FromBox" Grid.Column="1" IsEditable="True" SelectionChanged="Form_Changed" AutomationProperties.Name="From input" />
+                            <Button x:Name="LearnButton" Grid.Column="2" Content="Learn" Style="{StaticResource Secondary}" Margin="8,0,0,0" Padding="14,4" Click="Learn_Click"
+                                    ToolTip="Press a button on the wheel, press a pedal, or turn the wheel, and this fills in the input for you." />
+                            <TextBlock Grid.Column="3" Text="→  To" Style="{StaticResource FieldLabel}" Margin="14,0,8,0" />
+                            <ComboBox x:Name="ToBox" Grid.Column="4" IsEditable="True" SelectionChanged="Form_Changed" AutomationProperties.Name="To output" />
                         </Grid>
-                    </ScrollViewer>
-
-                    <StackPanel Grid.Column="2">
-                        <TextBlock Text="RESPONSE" Style="{StaticResource Caption}" />
-                        <local:CurvePreview x:Name="Preview" Width="230" Height="230" HorizontalAlignment="Left" />
-                        <TextBlock x:Name="PreviewNote" Style="{StaticResource Hint}" Margin="0,8,0,0"
-                                   Text="Shows deadzone, curve and anti-deadzone. Left to right is the input, bottom to top is the output." />
+                        <TextBlock x:Name="LearnHint" Style="{StaticResource Hint}" Visibility="Collapsed" />
                     </StackPanel>
+
+                    <Grid Grid.Row="1">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="1.2*" /><ColumnDefinition Width="12" /><ColumnDefinition Width="*" MinWidth="220" MaxWidth="560" /></Grid.ColumnDefinitions>
+
+                        <ScrollViewer x:Name="SettingsScroll" VerticalScrollBarVisibility="Auto">
+                            <StackPanel Margin="0,0,12,0">
+
+                                <!-- Sticks and triggers -->
+                                <Border x:Name="ResponseGroup" Style="{StaticResource Group}">
+                                    <StackPanel>
+                                        <TextBlock Text="RESPONSE CURVE" Style="{StaticResource GroupCaption}" />
+                                        <TextBlock x:Name="ResponseWhy" Style="{StaticResource Hint}" Margin="0,0,0,8" TextWrapping="Wrap" Visibility="Collapsed"
+                                                   Text="These do nothing for a button, key or mode output. They are shown because one of them needs putting right (see Checks)." />
+                                        <Grid Margin="0,0,0,8">
+                                            <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="12" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                            <StackPanel>
+                                                <TextBlock Text="Curve" Style="{StaticResource TopLabel}" />
+                                                <ComboBox x:Name="CurveBox" HorizontalAlignment="Stretch" SelectionChanged="Form_Changed" AutomationProperties.Name="Curve" />
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2">
+                                                <TextBlock x:Name="ExpLabel" Text="Exponent (1 = linear)" Style="{StaticResource TopLabel}" />
+                                                <StackPanel x:Name="ExpPanel">
+                                                    <TextBox x:Name="ExpBox" TextChanged="Form_Changed" ToolTip="{StaticResource HelpExponent}"
+                                                             AutomationProperties.Name="Exponent" AutomationProperties.HelpText="{StaticResource HelpExponent}" />
+                                                </StackPanel>
+                                                <TextBlock x:Name="PointsLabel" Text="Points (input,output)" Style="{StaticResource TopLabel}" />
+                                                <StackPanel x:Name="PointsPanel">
+                                                    <TextBox x:Name="PointsBox" TextChanged="Form_Changed" ToolTip="{StaticResource HelpPoints}"
+                                                             AutomationProperties.Name="Points" AutomationProperties.HelpText="{StaticResource HelpPoints}" />
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Grid>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="12" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                            <StackPanel Background="Transparent" ToolTip="{StaticResource HelpDeadzone}">
+                                                <TextBlock Text="Deadzone %" Style="{StaticResource TopLabel}" />
+                                                <DockPanel>
+                                                    <TextBox x:Name="DeadzoneBox" DockPanel.Dock="Right" Width="52" TextChanged="Form_Changed"
+                                                             AutomationProperties.Name="Deadzone percent" AutomationProperties.HelpText="{StaticResource HelpDeadzone}" />
+                                                    <Slider x:Name="DeadzoneSlider" Minimum="0" Maximum="99" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="0,0,6,0" AutomationProperties.Name="Deadzone" />
+                                                </DockPanel>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Background="Transparent" ToolTip="{StaticResource HelpAnti}">
+                                                <TextBlock Text="Anti-deadzone %" Style="{StaticResource TopLabel}" />
+                                                <DockPanel>
+                                                    <TextBox x:Name="AntiBox" DockPanel.Dock="Right" Width="52" TextChanged="Form_Changed"
+                                                             AutomationProperties.Name="Anti-deadzone percent" AutomationProperties.HelpText="{StaticResource HelpAnti}" />
+                                                    <Slider x:Name="AntiSlider" Minimum="0" Maximum="99" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="0,0,6,0" AutomationProperties.Name="Anti-deadzone" />
+                                                </DockPanel>
+                                            </StackPanel>
+                                        </Grid>
+                                        <TextBlock Style="{StaticResource Hint}" Text="Hover over a setting to see what it does." />
+                                        <TextBlock x:Name="SmoothLabel" Text="Smoothing (ms, 0 = off)" Style="{StaticResource TopLabel}" Margin="0,8,0,3" />
+                                        <StackPanel x:Name="SmoothPanel" Background="Transparent" ToolTip="{StaticResource HelpSmooth}">
+                                            <DockPanel>
+                                                <TextBox x:Name="SmoothBox" DockPanel.Dock="Right" Width="52" TextChanged="Form_Changed"
+                                                         AutomationProperties.Name="Smoothing in milliseconds" AutomationProperties.HelpText="{StaticResource HelpSmooth}" />
+                                                <Slider x:Name="SmoothSlider" Minimum="0" Maximum="300" TickFrequency="5" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="0,0,6,0" AutomationProperties.Name="Smoothing" />
+                                            </DockPanel>
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- Buttons, keys, mouse buttons and mode switches -->
+                                <Border x:Name="PressGroup" Style="{StaticResource Group}">
+                                    <StackPanel>
+                                        <TextBlock Text="BUTTON PRESS" Style="{StaticResource GroupCaption}" />
+                                        <TextBlock x:Name="PressWhy" Style="{StaticResource Hint}" Margin="0,0,0,8" TextWrapping="Wrap" Visibility="Collapsed"
+                                                   Text="These do nothing for a stick or trigger output. They are shown because one of them needs putting right (see Checks)." />
+                                        <Grid>
+                                            <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="12" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                            <StackPanel Background="Transparent" ToolTip="{StaticResource HelpThreshold}">
+                                                <TextBlock x:Name="ThresholdLabel" Text="Press at %" Style="{StaticResource TopLabel}" />
+                                                <StackPanel x:Name="ThresholdPanel">
+                                                    <DockPanel>
+                                                        <TextBox x:Name="ThresholdBox" DockPanel.Dock="Right" Width="52" TextChanged="Form_Changed"
+                                                                 AutomationProperties.Name="Press at percent" AutomationProperties.HelpText="{StaticResource HelpThreshold}" />
+                                                        <Slider x:Name="ThresholdSlider" Minimum="-100" Maximum="100" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="0,0,6,0" AutomationProperties.Name="Press at" />
+                                                    </DockPanel>
+                                                </StackPanel>
+                                            </StackPanel>
+                                            <StackPanel Grid.Column="2" Background="Transparent" ToolTip="{StaticResource HelpMode}">
+                                                <TextBlock x:Name="ModeLabel" Text="Button mode" Style="{StaticResource TopLabel}" />
+                                                <StackPanel x:Name="ModePanel">
+                                                    <ComboBox x:Name="ModeBox" HorizontalAlignment="Stretch" SelectionChanged="Form_Changed"
+                                                              AutomationProperties.Name="Button mode" AutomationProperties.HelpText="{StaticResource HelpMode}" />
+                                                    <StackPanel x:Name="PulsePanel" Orientation="Horizontal" Margin="0,8,0,0">
+                                                        <TextBlock Text="Pulse (ms)" Style="{StaticResource FieldLabel}" Margin="0,0,8,0" />
+                                                        <TextBox x:Name="PulseBox" Width="70" TextChanged="Form_Changed" AutomationProperties.Name="Pulse length in milliseconds" />
+                                                    </StackPanel>
+                                                </StackPanel>
+                                            </StackPanel>
+                                        </Grid>
+                                        <TextBlock Style="{StaticResource Hint}" Text="Press at: 50 if empty. Negative means the wheel turning left." />
+                                        <TextBlock x:Name="TurboLabel" Text="Turbo" Style="{StaticResource TopLabel}" Margin="0,8,0,3" />
+                                        <StackPanel x:Name="TurboPanel">
+                                            <WrapPanel>
+                                                <CheckBox x:Name="TurboBox" Content="Press and release repeatedly while held" Checked="Form_Changed" Unchecked="Form_Changed" />
+                                                <TextBox x:Name="TurboHzBox" Width="50" Margin="12,0,6,0" TextChanged="Form_Changed" AutomationProperties.Name="Turbo presses per second" />
+                                                <TextBlock Text="per second" Style="{StaticResource Muted}" VerticalAlignment="Center" />
+                                            </WrapPanel>
+                                            <TextBlock x:Name="TurboHint" Style="{StaticResource Hint}" TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </StackPanel>
+                                </Border>
+
+                                <!-- How the input is read, whatever it drives -->
+                                <Border x:Name="InputGroup" Style="{StaticResource Group}" Margin="0">
+                                    <StackPanel>
+                                        <TextBlock Text="INPUT" Style="{StaticResource GroupCaption}" />
+                                        <Grid Margin="0,0,0,6">
+                                            <Grid.ColumnDefinitions><ColumnDefinition /><ColumnDefinition Width="12" /><ColumnDefinition /></Grid.ColumnDefinitions>
+                                            <StackPanel Background="Transparent" ToolTip="{StaticResource HelpPart}">
+                                                <TextBlock Text="Axis part" Style="{StaticResource TopLabel}" />
+                                                <ComboBox x:Name="PartBox" HorizontalAlignment="Stretch" SelectionChanged="Form_Changed"
+                                                          AutomationProperties.Name="Axis part" AutomationProperties.HelpText="{StaticResource HelpPart}" />
+                                            </StackPanel>
+                                            <StackPanel x:Name="RangeRow" Grid.Column="2" Background="Transparent" ToolTip="{StaticResource HelpRange}">
+                                                <TextBlock Text="Wheel range (degrees)" Style="{StaticResource TopLabel}" />
+                                                <TextBox x:Name="RangeBox" TextChanged="Form_Changed" AutomationProperties.Name="Wheel range in degrees" AutomationProperties.HelpText="{StaticResource HelpRange}" />
+                                            </StackPanel>
+                                        </Grid>
+                                        <CheckBox x:Name="InvertBox" Content="Invert (flip the direction)" Checked="Form_Changed" Unchecked="Form_Changed" />
+                                        <TextBlock Text="Expression (optional, x = the input)" Style="{StaticResource TopLabel}" Margin="0,6,0,3" />
+                                        <TextBox x:Name="ExprBox" TextChanged="Form_Changed" FontFamily="Consolas" ToolTip="{StaticResource HelpExpression}"
+                                                 AutomationProperties.Name="Expression" AutomationProperties.HelpText="{StaticResource HelpExpression}" />
+                                    </StackPanel>
+                                </Border>
+                            </StackPanel>
+                        </ScrollViewer>
+
+                        <local:SquarePlotPanel x:Name="PlotPanel" Grid.Column="2">
+                            <TextBlock Text="RESPONSE" Style="{StaticResource Caption}" />
+                            <local:CurvePreview x:Name="Preview" />
+                            <TextBlock x:Name="PreviewNote" Style="{StaticResource Hint}" Margin="0,8,0,0"
+                                       Text="Shows deadzone, curve and anti-deadzone. Left to right is the input, bottom to top is the output." />
+                        </local:SquarePlotPanel>
+                    </Grid>
                 </Grid>
             </Border>
         </Grid>
 
-        <!-- Problems -->
-        <Border Grid.Row="4" Style="{StaticResource Card}" Padding="14,10">
-            <DockPanel>
-                <TextBlock DockPanel.Dock="Top" Text="CHECKS" Style="{StaticResource Caption}" Margin="0,0,0,6" />
-                <ScrollViewer VerticalScrollBarVisibility="Auto">
-                    <ItemsControl x:Name="IssueList">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock Text="{Binding Text}" Foreground="{Binding Brush}" TextWrapping="Wrap" Margin="0,0,0,3" />
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </ScrollViewer>
-            </DockPanel>
-        </Border>
-
-        <DockPanel Grid.Row="6">
-            <StackPanel DockPanel.Dock="Left" VerticalAlignment="Center" Margin="2,0,12,0" MaxWidth="470">
-                <TextBlock x:Name="ApplyNote" Style="{StaticResource Hint}" TextWrapping="Wrap"
-                           Text="Apply puts your changes into use now and keeps this window open, so you can try them in the game, tweak and apply again. Save does the same and closes. Saving rewrites the file in a tidy layout, drops any comments, and keeps a .bak copy of the old version." />
-            </StackPanel>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+        <!-- Checks, what Apply and Save do, and the buttons -->
+        <DockPanel x:Name="BottomBar" Grid.Row="4" SizeChanged="Layout_SizeChanged">
+            <!-- Like the health badge on the main window: a dot and a count, and the list on a click. -->
+            <Button x:Name="ChecksButton" DockPanel.Dock="Left" Style="{StaticResource Secondary}" Padding="12,8" Margin="0,0,12,0" VerticalAlignment="Center"
+                    Click="Checks_Click" ToolTip="See what the checks found in this profile." />
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0,0,0">
                 <Button x:Name="RevertButton" Content="Revert to start" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="Revert_Click" IsEnabled="False"
                         ToolTip="Put the profile back exactly as it was when you opened this window, and close it. Only available once you have applied something." />
                 <Button Content="Cancel" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="Cancel_Click" />
@@ -317,6 +366,8 @@
                         ToolTip="Use these changes now (the mapper reloads the profile) and keep this window open." />
                 <Button x:Name="SaveButton" Content="Save" Style="{StaticResource Primary}" MinWidth="100" Click="Save_Click" />
             </StackPanel>
+            <TextBlock x:Name="ApplyNote" Style="{StaticResource Hint}" TextWrapping="Wrap" Margin="0" VerticalAlignment="Center" HorizontalAlignment="Left" MaxWidth="640"
+                       Text="Apply puts your changes into use now and keeps this window open, so you can try them in the game, tweak and apply again. Save does the same and closes. Saving rewrites the file in a tidy layout, drops any comments, and keeps a .bak copy of the old version." />
         </DockPanel>
     </Grid>
 </Window>

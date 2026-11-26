@@ -32,8 +32,18 @@ public sealed class ProfileForce
     public int? Friction { get; set; }
     /// <summary>"both", "heavy" or "light": which of the game's two rumble motors the wheel plays.</summary>
     public string? Motors { get; set; }
+    /// <summary>"spring" (the wheel's straight spring) or "curve" (<see cref="CentringCurve"/>). <see cref="Spring"/> is the strength of either.</summary>
+    public string? CentringStyle { get; set; }
+    // The shape of the curve, meaning the same as in ForceSettings. What the wheel itself needs for the curve (the least pull, which way it
+    // pushes, which wheel was measured) is never part of a profile, so a shared profile cannot drive someone else's wheel the wrong way.
+    public int? CentreDegrees { get; set; }
+    public int? PeakDegrees { get; set; }
+    public int? LighteningPercent { get; set; }
+    public int? DampingPercent { get; set; }
 
-    public bool IsEmpty => Rumble is null && Spring is null && Friction is null && Motors is null;
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool IsEmpty => Rumble is null && Spring is null && Friction is null && Motors is null && CentringStyle is null
+        && CentreDegrees is null && PeakDegrees is null && LighteningPercent is null && DampingPercent is null;
 }
 
 /// <summary>
@@ -206,14 +216,7 @@ public static class ProfileLoader
         if (string.IsNullOrWhiteSpace(p.Name)) errors.Add("Profile needs a \"name\".");
         if (p.IsTemplate && p.Match.Exe.Count > 0) warnings.Add("A template is not attached to a game; the games listed in it are ignored. Put them on the profiles made from it.");
 
-        if (p.Force is { } force)
-        {
-            if (force.Rumble is int rb and (< 0 or > 100)) errors.Add($"force.rumble must be 0 to 100 (not {rb}).");
-            if (force.Spring is int sb and (< 0 or > 100)) errors.Add($"force.spring must be 0 to 100 (not {sb}).");
-            if (force.Friction is int fb and (< 0 or > 100)) errors.Add($"force.friction must be 0 to 100 (not {fb}).");
-            if (force.Motors is { } m && !ForceMath.MotorChoices.Contains(m, StringComparer.OrdinalIgnoreCase))
-                errors.Add($"force.motors must be one of {string.Join(", ", ForceMath.MotorChoices)} (not \"{m}\").");
-        }
+        if (p.Force is { } force) ValidateForce(force, "", errors);
 
         if (!p.Outputs.SecondPad && p.Rules.Any(r => r.To.TrimStart().StartsWith(Target.SecondPadPrefix, StringComparison.OrdinalIgnoreCase)))
             warnings.Add("Some rules send to the second controller (P2:) but outputs.secondPad is off, so they do nothing.");
@@ -324,6 +327,26 @@ public static class ProfileLoader
                 yield return (m.Rules[i], $"Mode \"{m.Name}\" rule {i + 1} ({m.Rules[i].From} -> {m.Rules[i].To})");
     }
 
+    private static void ValidateForce(ProfileForce force, string who, List<string> errors)
+    {
+        void Range(string name, int? value, int min, int max)
+        {
+            if (value is int v && (v < min || v > max)) errors.Add($"{who}force.{name} must be {min} to {max} (not {v}).");
+        }
+        Range("rumble", force.Rumble, 0, 100);
+        Range("spring", force.Spring, 0, 100);
+        Range("friction", force.Friction, 0, 100);
+        if (force.Motors is { } m && !ForceMath.MotorChoices.Contains(m, StringComparer.OrdinalIgnoreCase))
+            errors.Add($"{who}force.motors must be one of {string.Join(", ", ForceMath.MotorChoices)} (not \"{m}\").");
+        if (force.CentringStyle is { } style && !style.Equals(CentringCurve.StyleSpring, StringComparison.OrdinalIgnoreCase)
+            && !style.Equals(CentringCurve.StyleCurve, StringComparison.OrdinalIgnoreCase))
+            errors.Add($"{who}force.centringStyle must be \"spring\" or \"curve\" (not \"{style}\").");
+        Range("centreDegrees", force.CentreDegrees, 1, 45);      // the same limits as the sliders in Settings
+        Range("peakDegrees", force.PeakDegrees, 10, 180);
+        Range("lighteningPercent", force.LighteningPercent, 0, 100);
+        Range("dampingPercent", force.DampingPercent, 0, 100);
+    }
+
     private static void ValidateModes(Profile p, List<string> errors, List<string> warnings)
     {
         if (p.Modes.Count == 0) return;
@@ -338,14 +361,7 @@ public static class ProfileLoader
             if (ProfileModes.IsReservedName(m.Name)) errors.Add($"{who}: that name is used for switching (Next, Previous); choose another.");
             if (m.Name.Contains(':')) errors.Add($"{who}: the name cannot contain a colon.");
             if (!seen.Add(m.Name.Trim())) errors.Add($"{who}: another mode has the same name.");
-            if (m.Force is { } force)
-            {
-                if (force.Rumble is int rb and (< 0 or > 100)) errors.Add($"{who}: force.rumble must be 0 to 100 (not {rb}).");
-                if (force.Spring is int sb and (< 0 or > 100)) errors.Add($"{who}: force.spring must be 0 to 100 (not {sb}).");
-                if (force.Friction is int fb and (< 0 or > 100)) errors.Add($"{who}: force.friction must be 0 to 100 (not {fb}).");
-                if (force.Motors is { } mo && !ForceMath.MotorChoices.Contains(mo, StringComparer.OrdinalIgnoreCase))
-                    errors.Add($"{who}: force.motors must be one of {string.Join(", ", ForceMath.MotorChoices)} (not \"{mo}\").");
-            }
+            if (m.Force is { } force) ValidateForce(force, who + ": ", errors);
             foreach (string t in m.RemovedRules ?? [])
                 if (!p.Rules.Any(r => string.Equals(r.To.Trim(), t.Trim(), StringComparison.OrdinalIgnoreCase)))
                     warnings.Add($"{who} turns off \"{t}\", but the profile has no rule for that output.");

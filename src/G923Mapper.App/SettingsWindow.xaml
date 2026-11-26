@@ -303,11 +303,14 @@
                         <TextBlock Text="VIRTUAL CONTROLLERS" Style="{StaticResource SectionTitle}" />
                         <TextBlock x:Name="PadsStatus" TextWrapping="Wrap" Text="Checking…" />
                         <TextBlock x:Name="PadsList" Style="{StaticResource Muted}" FontFamily="Consolas" Margin="0,6,0,0" TextWrapping="Wrap" />
-                        <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                        <WrapPanel Margin="0,12,0,0">
                             <Button x:Name="PadsRefreshButton" Content="Refresh" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="PadsRefresh_Click" />
-                            <Button x:Name="PadsRemoveButton" Content="Remove leftovers…" Style="{StaticResource Secondary}" IsEnabled="False" Click="PadsRemove_Click" />
-                            <TextBlock x:Name="PadsMessage" Style="{StaticResource Muted}" VerticalAlignment="Center" Margin="14,0,0,0" />
-                        </StackPanel>
+                            <Button x:Name="PadsRemoveButton" Content="Remove leftovers…" Style="{StaticResource Secondary}" Margin="0,0,8,0" IsEnabled="False" Click="PadsRemove_Click" />
+                            <Button Content="Ignored tips…" Style="{StaticResource Secondary}" Click="IgnoredTips_Click"
+                                    ToolTip="Health tips you have ignored: turn them back on, or reset them all." />
+                        </WrapPanel>
+                        <TextBlock x:Name="PadsMessage" Style="{StaticResource Muted}" Margin="0,6,0,0" />
+
                         <TextBlock Style="{StaticResource Hint}"
                                    Text="Every virtual Xbox 360 controller on this PC, from any program. A connected one that this app did not make can cause double input in a game. Leftovers are unplugged entries that earlier sessions left in Device Manager; removing them is safe and asks for administrator permission. Real Xbox controllers are never touched." />
                     </StackPanel>

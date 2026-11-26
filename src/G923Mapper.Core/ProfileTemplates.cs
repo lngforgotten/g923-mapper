@@ -139,6 +139,11 @@ public static class Templates
                 if (Has(f, "spring")) r.Force.Spring = cf.Spring;
                 if (Has(f, "friction")) r.Force.Friction = cf.Friction;
                 if (Has(f, "motors")) r.Force.Motors = cf.Motors;
+                if (Has(f, "centringStyle")) r.Force.CentringStyle = cf.CentringStyle;
+                if (Has(f, "centreDegrees")) r.Force.CentreDegrees = cf.CentreDegrees;
+                if (Has(f, "peakDegrees")) r.Force.PeakDegrees = cf.PeakDegrees;
+                if (Has(f, "lighteningPercent")) r.Force.LighteningPercent = cf.LighteningPercent;
+                if (Has(f, "dampingPercent")) r.Force.DampingPercent = cf.DampingPercent;
             }
 
             // Rules: the template's, with the profile's own laid over them by output target.
@@ -195,6 +200,11 @@ public static class Templates
         Add("force.spring", "Centring spring", Opt(b.Force?.Spring), Opt(child.Force?.Spring));
         Add("force.friction", "Wheel friction", Opt(b.Force?.Friction), Opt(child.Force?.Friction));
         Add("force.motors", "Rumble motors", b.Force?.Motors ?? "(app setting)", child.Force?.Motors ?? "(app setting)");
+        Add("force.centringStyle", "Centring style", b.Force?.CentringStyle ?? "(app setting)", child.Force?.CentringStyle ?? "(app setting)");
+        Add("force.centreDegrees", "Curve centre zone", Opt(b.Force?.CentreDegrees), Opt(child.Force?.CentreDegrees));
+        Add("force.peakDegrees", "Curve peak angle", Opt(b.Force?.PeakDegrees), Opt(child.Force?.PeakDegrees));
+        Add("force.lighteningPercent", "Curve lightening", Opt(b.Force?.LighteningPercent), Opt(child.Force?.LighteningPercent));
+        Add("force.dampingPercent", "Curve damping", Opt(b.Force?.DampingPercent), Opt(child.Force?.DampingPercent));
         return list;
     }
 
@@ -282,6 +292,11 @@ public static class Templates
         if (diffs.Contains("force.spring")) force.Add($"\"spring\": {(child.Force?.Spring is int sp ? sp.ToString() : "null")}");
         if (diffs.Contains("force.friction")) force.Add($"\"friction\": {(child.Force?.Friction is int fr ? fr.ToString() : "null")}");
         if (diffs.Contains("force.motors")) force.Add($"\"motors\": {(child.Force?.Motors is { } mo ? JsonSerializer.Serialize(mo.ToLowerInvariant()) : "null")}");
+        if (diffs.Contains("force.centringStyle")) force.Add($"\"centringStyle\": {(child.Force?.CentringStyle is { } cs ? JsonSerializer.Serialize(cs.ToLowerInvariant()) : "null")}");
+        if (diffs.Contains("force.centreDegrees")) force.Add($"\"centreDegrees\": {(child.Force?.CentreDegrees is int cd ? cd.ToString() : "null")}");
+        if (diffs.Contains("force.peakDegrees")) force.Add($"\"peakDegrees\": {(child.Force?.PeakDegrees is int pd ? pd.ToString() : "null")}");
+        if (diffs.Contains("force.lighteningPercent")) force.Add($"\"lighteningPercent\": {(child.Force?.LighteningPercent is int lp ? lp.ToString() : "null")}");
+        if (diffs.Contains("force.dampingPercent")) force.Add($"\"dampingPercent\": {(child.Force?.DampingPercent is int dp ? dp.ToString() : "null")}");
         if (force.Count > 0) sb.AppendLine($"  \"force\": {{ {string.Join(", ", force)} }},");
 
         // Rules of their own: every rule for an output target that differs from the template's (or that the template has none for).
@@ -384,6 +399,11 @@ public static class Templates
             case "force.spring": SetForce(child, f => f.Spring = b.Force?.Spring); break;
             case "force.friction": SetForce(child, f => f.Friction = b.Force?.Friction); break;
             case "force.motors": SetForce(child, f => f.Motors = b.Force?.Motors); break;
+            case "force.centringStyle": SetForce(child, f => f.CentringStyle = b.Force?.CentringStyle); break;
+            case "force.centreDegrees": SetForce(child, f => f.CentreDegrees = b.Force?.CentreDegrees); break;
+            case "force.peakDegrees": SetForce(child, f => f.PeakDegrees = b.Force?.PeakDegrees); break;
+            case "force.lighteningPercent": SetForce(child, f => f.LighteningPercent = b.Force?.LighteningPercent); break;
+            case "force.dampingPercent": SetForce(child, f => f.DampingPercent = b.Force?.DampingPercent); break;
         }
     }
 

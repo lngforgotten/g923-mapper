@@ -127,6 +127,8 @@ public sealed class AppSettings
     /// <summary>A note left by an update that has just swapped itself in, so the new copy can say so once.</summary>
     public static string UpdatedMarkerPath => Path.Combine(AppDataDir, "just-updated.json");
 
+    public static string IgnoredTipsPath => Path.Combine(AppDataDir, "ignored-tips.json");
+
     public static string AntiCheatPath => Path.Combine(AppDataDir, "anticheat.txt");
 
     private static string PathFor(int instance) => Path.Combine(AppDataDir, InstancePlan.SettingsFileName(instance));

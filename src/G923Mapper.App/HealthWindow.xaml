@@ -18,6 +18,8 @@
                 <TextBlock x:Name="Summary" FontSize="17" FontWeight="SemiBold" Text="Checking…" />
                 <TextBlock Style="{StaticResource Muted}" Margin="0,4,0,0"
                            Text="Everything this app depends on, in plain language. Anything that needs attention is listed first." />
+                <TextBlock x:Name="Message" Margin="0,8,0,0" TextWrapping="Wrap" FontWeight="SemiBold" Visibility="Collapsed"
+                           AutomationProperties.LiveSetting="Polite" />
             </StackPanel>
         </Border>
 
@@ -36,6 +38,14 @@
                                 <StackPanel Grid.Column="1">
                                     <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap" />
                                     <TextBlock Text="{Binding Detail}" Style="{StaticResource Muted}" Margin="0,2,0,0" />
+                                    <WrapPanel Visibility="{Binding LeftoverVisibility}">
+                                        <Button Content="Remove…" Style="{StaticResource Secondary}" Margin="0,8,8,0" Click="RemoveLeftovers_Click"
+                                                ToolTip="Take the unplugged entries out of Device Manager. Asks first, then Windows asks for administrator permission." />
+                                        <Button Content="{Binding IgnoreText}" Style="{StaticResource Secondary}" Margin="0,8,8,0" Click="IgnoreLeftovers_Click"
+                                                ToolTip="Stop mentioning the leftovers that are there now. A new one is still mentioned." />
+                                        <Button Content="Never mention leftovers" Style="{StaticResource Secondary}" Margin="0,8,0,0" Click="NeverLeftovers_Click"
+                                                ToolTip="Stop mentioning leftover virtual controllers altogether, including new ones." />
+                                    </WrapPanel>
                                 </StackPanel>
                                 <Button Grid.Column="2" Content="{Binding ActionText}" Visibility="{Binding ActionVisibility}"
                                         Style="{StaticResource Secondary}" Margin="12,0,0,0" VerticalAlignment="Top" Click="Action_Click" />
@@ -46,6 +56,8 @@
             </ScrollViewer>
         </Border>
 
+        <Button x:Name="IgnoredButton" Grid.Row="4" Content="Ignored tips…" Style="{StaticResource Secondary}" HorizontalAlignment="Left" Click="Ignored_Click"
+                ToolTip="See what you have ignored, turn it back on, or reset them all." />
         <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Right">
             <Button Content="Save report…" Style="{StaticResource Secondary}" Margin="0,0,8,0" Click="SaveReport_Click"
                     ToolTip="Save these findings and the recent log to a text file you can send to someone." />

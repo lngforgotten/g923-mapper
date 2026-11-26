@@ -51,6 +51,13 @@ public static partial class VirtualPadText
 
     public static IReadOnlyList<VirtualPadInfo> Leftovers(IEnumerable<VirtualPadInfo> pads) => pads.Where(p => !p.Connected).ToList();
 
+    /// <summary>Those of <paramref name="instanceIds"/> that are still unplugged entries, so a controller plugged in since is never removed.</summary>
+    public static IReadOnlyList<string> StillLeftover(IEnumerable<string> instanceIds, IEnumerable<VirtualPadInfo> now)
+    {
+        var left = new HashSet<string>(Leftovers(now).Select(p => p.InstanceId), StringComparer.OrdinalIgnoreCase);
+        return instanceIds.Where(left.Contains).ToList();
+    }
+
     /// <summary>
     /// One <c>cmd.exe</c> argument string that removes each device and its children, so the user gets one administrator prompt.
     /// A failure on one does not stop the others. Refuses (returns null) if given nothing, or anything that is not a virtual controller.

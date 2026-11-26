@@ -84,6 +84,11 @@ public static class ForceMath
         if (profile.Spring is int s) f.SpringPercent = Math.Clamp(s, 0, 100);
         if (profile.Friction is int fr) f.FrictionPercent = Math.Clamp(fr, 0, 100);
         if (profile.Motors is { } m && MotorChoices.Contains(m, StringComparer.OrdinalIgnoreCase)) f.Motors = m.ToLowerInvariant();
+        if (profile.CentringStyle is { } style) f.CentringStyle = CentringCurve.NormaliseStyle(style);
+        if (profile.CentreDegrees is int c) f.CentreDegrees = Math.Clamp(c, 1, 45);
+        if (profile.PeakDegrees is int pk) f.PeakDegrees = Math.Clamp(pk, 10, 180);
+        if (profile.LighteningPercent is int l) f.LighteningPercent = Math.Clamp(l, 0, 100);
+        if (profile.DampingPercent is int d) f.DampingPercent = Math.Clamp(d, 0, 100);
         return f;
     }
 

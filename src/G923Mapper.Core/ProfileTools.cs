@@ -257,15 +257,7 @@ public static class ProfileWriter
         if (p.LeaveWheel && p.KeepKeys) sb.AppendLine("  \"keepKeys\": true,");
         if (p.ModeShortcuts is { } shortcuts)
             sb.AppendLine("  \"modeShortcuts\": [" + string.Join(", ", shortcuts.Select(m => $"{{ \"trigger\": {Str(m.Trigger)}, \"action\": {Str(m.Action)} }}")) + "],");
-        if (p.Force is { IsEmpty: false } force)
-        {
-            var parts = new List<string>();
-            if (force.Rumble is int rumble) parts.Add($"\"rumble\": {rumble}");
-            if (force.Spring is int spring) parts.Add($"\"spring\": {spring}");
-            if (force.Friction is int friction) parts.Add($"\"friction\": {friction}");
-            if (force.Motors is { } motors) parts.Add($"\"motors\": {Str(motors.ToLowerInvariant())}");
-            sb.AppendLine($"  \"force\": {{ {string.Join(", ", parts)} }},");
-        }
+        if (p.Force is { IsEmpty: false } force) sb.AppendLine($"  \"force\": {ForceText(force)},");
         sb.AppendLine("  \"rules\": [");
         for (int i = 0; i < p.Rules.Count; i++)
             sb.AppendLine("    " + RuleText(p.Rules[i]) + (i < p.Rules.Count - 1 ? "," : ""));
@@ -273,6 +265,22 @@ public static class ProfileWriter
         if (p.Modes.Count > 0) AppendModes(sb, p);
         sb.AppendLine("}");
         return sb.ToString();
+    }
+
+    /// <summary>A feel as a line of JSON, with only the values it sets.</summary>
+    private static string ForceText(ProfileForce f)
+    {
+        var parts = new List<string>();
+        if (f.Rumble is int rumble) parts.Add($"\"rumble\": {rumble}");
+        if (f.Spring is int spring) parts.Add($"\"spring\": {spring}");
+        if (f.Friction is int friction) parts.Add($"\"friction\": {friction}");
+        if (f.Motors is { } motors) parts.Add($"\"motors\": {Str(motors.ToLowerInvariant())}");
+        if (f.CentringStyle is { } style) parts.Add($"\"centringStyle\": {Str(style.ToLowerInvariant())}");
+        if (f.CentreDegrees is int centre) parts.Add($"\"centreDegrees\": {centre}");
+        if (f.PeakDegrees is int peak) parts.Add($"\"peakDegrees\": {peak}");
+        if (f.LighteningPercent is int lightening) parts.Add($"\"lighteningPercent\": {lightening}");
+        if (f.DampingPercent is int damping) parts.Add($"\"dampingPercent\": {damping}");
+        return "{ " + string.Join(", ", parts) + " }";
     }
 
     /// <summary>The "modes" array, as the last thing in the file.</summary>
@@ -284,15 +292,7 @@ public static class ProfileWriter
             ProfileMode m = p.Modes[i];
             sb.AppendLine("    {");
             sb.AppendLine($"      \"name\": {Str(m.Name)},");
-            if (m.Force is { IsEmpty: false } f)
-            {
-                var parts = new List<string>();
-                if (f.Rumble is int ru) parts.Add($"\"rumble\": {ru}");
-                if (f.Spring is int sp) parts.Add($"\"spring\": {sp}");
-                if (f.Friction is int fr) parts.Add($"\"friction\": {fr}");
-                if (f.Motors is { } mo) parts.Add($"\"motors\": {Str(mo.ToLowerInvariant())}");
-                sb.AppendLine($"      \"force\": {{ {string.Join(", ", parts)} }},");
-            }
+            if (m.Force is { IsEmpty: false } f) sb.AppendLine($"      \"force\": {ForceText(f)},");
             if (m.RemovedRules is { Count: > 0 } removed) sb.AppendLine($"      \"removedRules\": [{string.Join(", ", removed.Select(Str))}],");
             sb.AppendLine("      \"rules\": [");
             for (int j = 0; j < m.Rules.Count; j++)

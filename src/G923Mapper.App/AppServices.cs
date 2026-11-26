@@ -16,6 +16,8 @@ public sealed class AppServices
     public required string DevicesPath { get; init; }
     /// <summary>Which copy of the app this is (1 = the first; extra copies each drive the next wheel).</summary>
     public int Instance { get; init; } = 1;
+    /// <summary>Health tips the user asked not to see again (shared by every copy of the app).</summary>
+    public IgnoredTipsFile IgnoredTips { get; } = new(AppSettings.IgnoredTipsPath);
     /// <summary>A window handle DirectInput can use for its cooperative level.</summary>
     public required Func<IntPtr> Hwnd { get; init; }
 

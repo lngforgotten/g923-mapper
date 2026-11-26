@@ -83,6 +83,9 @@ public partial class RuleEditorWindow : Window
     public RuleEditorWindow(Profile profile, DeviceRegistry devices, string path, Func<MapperSnapshot?> latest, AppSettings? settings = null, Func<string, Profile?>? findTemplate = null, int startMode = -1)
     {
         InitializeComponent();
+        // Opens large so the rules and the response graph have room, but not larger than the screen.
+        Width = Math.Max(MinWidth, Math.Min(Width, SystemParameters.WorkArea.Width));
+        Height = Math.Max(MinHeight, Math.Min(Height, SystemParameters.WorkArea.Height));
         _settings = settings;
         _findTemplate = findTemplate;
         _devices = devices;
@@ -156,6 +159,12 @@ public partial class RuleEditorWindow : Window
         try { _startText = File.Exists(_path) ? File.ReadAllText(_path) : ""; } catch (IOException) { }
     }
 
+    /// <summary>The least height the rules and the rule form keep; the profile settings above them scroll instead of squeezing them out.</summary>
+    private const double RulesMinHeight = 300;
+
+    private void Layout_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        HeaderScroll.MaxHeight = Math.Max(120, Root.ActualHeight - BottomBar.ActualHeight - 24 - RulesMinHeight);   // 24: the two gaps between the rows
+
     private string _startText = "";       // the file exactly as it was when the window opened, for Revert
     private bool _appliedSomething, _finalSaved, _bakMade;
 
@@ -179,7 +188,7 @@ public partial class RuleEditorWindow : Window
     private void Apply_Click(object sender, RoutedEventArgs e)
     {
         Revalidate();
-        if (!_valid) { ApplyNote.Text = "This profile has problems that have to be fixed before it can be applied. They are listed at the bottom of the window."; return; }
+        if (!_valid) { ApplyNote.Text = "This profile has problems that have to be fixed before it can be applied. Press Checks, to the left, to read them."; return; }
         if (!WriteNow()) return;
         _openedAs = ProfileWriter.ToJson(BuildProfile());   // from here, "unsaved" means changed since this apply
         _appliedSomething = true;
@@ -228,7 +237,7 @@ public partial class RuleEditorWindow : Window
         Dispatcher.BeginInvoke(() =>
         {
             Revalidate();
-            if (!_valid) { ThemedMessageBox.Show(this, "This profile has problems that have to be fixed before it can be saved. They are listed at the bottom of the window.", "Unsaved changes", MessageBoxButton.OK, MessageBoxImage.Information); return; }
+            if (!_valid) { ThemedMessageBox.Show(this, "This profile has problems that have to be fixed before it can be saved. Press Checks at the bottom left to read them.", "Unsaved changes", MessageBoxButton.OK, MessageBoxImage.Information); return; }
             Save_Click(this, new RoutedEventArgs());
         });
     }
@@ -355,6 +364,8 @@ public partial class RuleEditorWindow : Window
         TurboHzBox.Text = Fmt(r.TurboHz);
         _populating = false;
         _fieldErrors.Clear();
+        foreach (TextBox box in _badBoxes.ToList()) Mark(box, true);   // the rule just loaded has nothing mistyped in it
+        SettingsScroll.ScrollToTop();
         UpdateVisibility();
         UpdatePreview();
         Revalidate();
@@ -452,30 +463,25 @@ public partial class RuleEditorWindow : Window
     private static bool TryNumber(string text, out double v) =>
         double.TryParse(text.Replace(',', '.'), NumberStyles.Float, CultureInfo.InvariantCulture, out v);
 
+    private readonly HashSet<TextBox> _badBoxes = new();   // boxes of the selected rule whose text could not be read
+
     /// <summary>Red border when the text is invalid; otherwise back to the control's own (themed) border.</summary>
-    private static void Mark(TextBox box, bool ok)
+    private void Mark(TextBox box, bool ok)
     {
-        if (ok) box.ClearValue(Control.BorderBrushProperty);
-        else box.BorderBrush = Red;
+        if (ok) { box.ClearValue(Control.BorderBrushProperty); _badBoxes.Remove(box); }
+        else { box.BorderBrush = Red; _badBoxes.Add(box); }
     }
 
     private void UpdateVisibility()
     {
+        Rule r = Current?.Rule ?? new Rule();
         string curve = CurveBox.SelectedItem as string ?? "linear";
-        SetVisible(curve == "expo", ExpLabel, ExpPanel);
-        SetVisible(curve == "custom", PointsLabel, PointsPanel);
-
         string to = ToBox.Text.Trim();
-        bool button = to.StartsWith("Button:", StringComparison.OrdinalIgnoreCase);
-        // Pad buttons, keys and mouse buttons are all on/off outputs, so they all have a trigger point and a button mode.
-        bool onOff = button || to.StartsWith("Key:", StringComparison.OrdinalIgnoreCase) || to.StartsWith("Mouse:", StringComparison.OrdinalIgnoreCase);
-        SetVisible(to.Length > 0 && !onOff, SmoothLabel, SmoothPanel);   // smoothing is for sticks and triggers
-        SetVisible(onOff, ThresholdLabel, ThresholdPanel);
-        SetVisible(onOff, ModeLabel, ModePanel);
-        PulsePanel.Visibility = (ModeBox.SelectedItem as string) == "pulse" ? Visibility.Visible : Visibility.Collapsed;
+        // A press output (button, key, mouse button, mode switch) has press settings; a stick or trigger has a response curve.
+        bool press = RuleSettings.IsPress(to);
+        bool padButton = RuleSettings.IsPadButton(to);
 
         // Turbo is a standard-mode extra for button outputs, never for a game on the anti-cheat list.
-        SetVisible(button, TurboLabel, TurboPanel);
         string? blocked = AntiCheatList.Current.FirstProtected(ExeBox.Text.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         bool turboOk = IsStandard && blocked is null;
         TurboBox.IsEnabled = TurboHzBox.IsEnabled = turboOk;
@@ -487,6 +493,32 @@ public partial class RuleEditorWindow : Window
             _populating = true; TurboBox.IsChecked = false; _populating = false;
             Current.Rule.Turbo = false;
         }
+
+        // A box with something unusable in it stays on screen, whatever else would hide it, so that it can be put right.
+        bool Bad(params TextBox[] boxes) => boxes.Any(_badBoxes.Contains);
+
+        SetVisible(curve == "expo" || r.Exponent <= 0 || Bad(ExpBox), ExpLabel, ExpPanel);
+        SetVisible(curve == "custom" || Bad(PointsBox), PointsLabel, PointsPanel);
+
+        bool response = !press || RuleSettings.ResponseNeedsAttention(r) || Bad(ExpBox, PointsBox, DeadzoneBox, AntiBox, SmoothBox)
+            || ResponseGroup.IsKeyboardFocusWithin;   // not taken away while it is being typed in
+        bool pressSettings = press || RuleSettings.PressNeedsAttention(r) || Bad(ThresholdBox, PulseBox, TurboHzBox) || PressGroup.IsKeyboardFocusWithin;
+        SetVisible(response, ResponseGroup);
+        SetVisible(pressSettings, PressGroup);
+        SetVisible(response && press, ResponseWhy);
+        SetVisible(pressSettings && !press, PressWhy);
+
+        // The graph only means something for a stick or trigger; without it the settings take the whole width.
+        SetVisible(!press, PlotPanel);
+        Grid.SetColumnSpan(SettingsScroll, press ? 3 : 1);
+
+        SetVisible(!RuleSettings.IsModeSwitch(to) || !r.Mode.Equals("hold", StringComparison.OrdinalIgnoreCase), ModeLabel, ModePanel);
+        SetVisible((ModeBox.SelectedItem as string) == "pulse" || r.PulseMs < 1 || r.PulseMs > 1000 || Bad(PulseBox), PulsePanel);
+        SetVisible(padButton || r.Turbo || r.TurboHz < 1 || r.TurboHz > 30 || Bad(TurboHzBox), TurboLabel, TurboPanel);
+
+        // Wheel range is for the wheel; one already set on another input stays visible so it can be removed.
+        bool wheel = Device is { } device && _devices.IsSigned(device, FromBox.Text.Trim());
+        SetVisible(wheel || RangeBox.Text.Length > 0 || RangeRow.IsKeyboardFocusWithin, RangeRow);
     }
 
     private static void SetVisible(bool on, params UIElement[] items)
@@ -538,6 +570,7 @@ public partial class RuleEditorWindow : Window
         FeelRumbleText.Text = $"{(int)FeelRumble.Value}%";
         FeelSpringText.Text = $"{(int)FeelSpring.Value}%";
         FeelFrictionText.Text = $"{(int)FeelFriction.Value}%";
+        ShowMatchingCar();
         if (!_populating) Revalidate();
     }
 
@@ -549,6 +582,64 @@ public partial class RuleEditorWindow : Window
         FeelRumbleText.Text = $"{(int)FeelRumble.Value}%";
         FeelSpringText.Text = $"{(int)FeelSpring.Value}%";
         FeelFrictionText.Text = $"{(int)FeelFriction.Value}%";
+
+        bool curve = FeelCentringBox.SelectedIndex == 2;
+        FeelCentringRow.Visibility = on ? Visibility.Visible : Visibility.Collapsed;
+        FeelCurvePanel.Visibility = curve ? Visibility.Visible : Visibility.Collapsed;
+        FeelCurveNote.Visibility = curve && AppForce.CentringWheel.Length == 0 ? Visibility.Visible : Visibility.Collapsed;
+        ShowMatchingCar();
+    }
+
+    // ---------------------------------------------------------------- the centring of a feel
+
+    private CentringPreset _feelCurve = new("Custom", 0, 12, 60, 40, 5);   // the shape; its strength is the Centring slider
+    private ProfileForce? _feelBefore;                                    // the feel the controls were filled from
+
+    private ForceSettings AppForce => _settings?.Force ?? new ForceSettings();
+
+    private IReadOnlyList<CentringPreset> Cars => CentringPresetBook.All(_settings?.CentringPresets);
+
+    private CentringPreset FeelCurve => _feelCurve with { Strength = (int)FeelSpring.Value };
+
+    /// <summary>Show which preset the strength and shape amount to, without that counting as a change.</summary>
+    private void ShowMatchingCar()
+    {
+        if (FeelCarBox.ItemsSource is null) return;
+        bool was = _populating;
+        _populating = true;
+        FeelCarBox.SelectedIndex = ProfileCentring.Matching(Cars, FeelCurve) + 1;   // 0 = Custom
+        _populating = was;
+    }
+
+    private void FeelCentring_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_populating) return;
+        UpdateFeelUi();
+        Revalidate();
+    }
+
+    private void FeelCar_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_populating || FeelCarBox.SelectedIndex <= 0) return;
+        ApplyCurve(Cars[FeelCarBox.SelectedIndex - 1]);
+    }
+
+    private void FeelShape_Click(object sender, RoutedEventArgs e)
+    {
+        double half = (_latest()?.Device.RotationDegrees ?? Device?.RotationDegrees ?? 900) / 2.0;
+        string title = _view < 0 ? "Centring curve" : $"Centring curve: {_modes[_view].Name}";
+        var dlg = new CentringShapeWindow(this, title, FeelCurve, AppForce, half);
+        if (dlg.ShowDialog() == true) ApplyCurve(dlg.Result);
+    }
+
+    private void ApplyCurve(CentringPreset curve)
+    {
+        _feelCurve = curve;
+        _populating = true;
+        FeelSpring.Value = curve.Strength;
+        _populating = false;
+        UpdateFeelUi();
+        Revalidate();
     }
 
     private string _safetyBefore = "Strict";
@@ -598,6 +689,7 @@ public partial class RuleEditorWindow : Window
     {
         if (_populating) return;
         RefreshFromList();
+        UpdateVisibility();   // which inputs are the wheel depends on the device
         UpdatePreview();
         Revalidate();
     }
@@ -682,22 +774,37 @@ public partial class RuleEditorWindow : Window
     /// </summary>
     private void ShowFeelValues(ProfileForce? feel)
     {
-        ForceSettings app = _settings?.Force ?? new ForceSettings();
-        FeelRumble.Value = feel?.Rumble ?? app.RumblePercent;
-        FeelSpring.Value = feel?.Spring ?? app.SpringPercent;
-        FeelFriction.Value = feel?.Friction ?? app.FrictionPercent;
-        string motors = feel?.Motors ?? app.Motors;
+        ForceSettings app = AppForce;
+        // In a mode, what the mode leaves unset comes from the profile before Settings, as it does while running.
+        ProfileForce? running = _view < 0 ? feel : ProfileModes.MergeForce(_profileForce, feel);
+        FeelRumble.Value = running?.Rumble ?? app.RumblePercent;
+        FeelSpring.Value = running?.Spring ?? app.SpringPercent;
+        FeelFriction.Value = running?.Friction ?? app.FrictionPercent;
+        string motors = running?.Motors ?? app.Motors;
         FeelMotors.SelectedIndex = string.Equals(motors, ForceMath.MotorsHeavy, StringComparison.OrdinalIgnoreCase) ? 1
             : string.Equals(motors, ForceMath.MotorsLight, StringComparison.OrdinalIgnoreCase) ? 2 : 0;
+
+        // A mode that does not choose for itself follows the profile, and a profile follows Settings.
+        _feelBefore = feel;
+        _feelCurve = ProfileCentring.Shape(running, app);
+        FeelCentringBox.ItemsSource = new[] { _view < 0 ? "Same as Settings" : "Same as the profile", "Straight spring", "Curve" };
+        FeelCentringBox.SelectedIndex = feel?.CentringStyle is not { } style ? 0 : CentringCurve.NormaliseStyle(style) == CentringCurve.StyleCurve ? 2 : 1;
+        FeelCarBox.ItemsSource = new[] { "Custom" }.Concat(Cars.Select(c => c.Name)).ToList();
+        ShowMatchingCar();
     }
 
-    private ProfileForce? ForceFromUi() => FeelBox.IsChecked == true
-        ? new ProfileForce
+    private ProfileForce? ForceFromUi()
+    {
+        if (FeelBox.IsChecked != true) return null;
+        var force = new ProfileForce
         {
             Rumble = (int)FeelRumble.Value, Spring = (int)FeelSpring.Value, Friction = (int)FeelFriction.Value,
             Motors = FeelMotors.SelectedIndex switch { 1 => ForceMath.MotorsHeavy, 2 => ForceMath.MotorsLight, _ => ForceMath.MotorsBoth },
-        }
-        : null;
+        };
+        string? style = FeelCentringBox.SelectedIndex switch { 1 => CentringCurve.StyleSpring, 2 => CentringCurve.StyleCurve, _ => null };
+        ProfileCentring.Write(force, style, FeelCurve, _feelBefore);
+        return force;
+    }
 
     /// <summary>Show the feel belonging to the view being edited (the profile's, or the mode's) in the feel controls.</summary>
     private void ShowFeel()
@@ -999,9 +1106,38 @@ public partial class RuleEditorWindow : Window
         _valid = result.Ok && _fieldErrors.Count == 0;
         UpdateTemplateRow(result.Profile);
         UpdateModeUi();
+        ShowCheckCount(_fieldErrors.Count + result.Errors.Count, result.Warnings.Count);
         if (issues.Count == 0) issues.Add(new Issue("✓ Looks good.", Green));
-        IssueList.ItemsSource = issues;
+        _issues = issues;
         SaveButton.IsEnabled = _valid;
+    }
+
+    // ---------------------------------------------------------------- the checks button
+
+    private IReadOnlyList<Issue> _issues = [];
+    private string _checkSummary = "";
+
+    /// <summary>The Checks button: a coloured dot and how many things were found, like the health badge on the main window.</summary>
+    private void ShowCheckCount(int problems, int warnings)
+    {
+        _checkSummary = ProfileChecks.Summary(problems, warnings);
+        string text = "Checks: " + _checkSummary;
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        row.Children.Add(new System.Windows.Shapes.Ellipse
+        {
+            Width = 9, Height = 9, Fill = problems > 0 ? Red : warnings > 0 ? Amber : Green,
+            Margin = new Thickness(0, 1, 8, 0), VerticalAlignment = VerticalAlignment.Center,
+        });
+        row.Children.Add(new TextBlock { Text = text, VerticalAlignment = VerticalAlignment.Center });
+        ChecksButton.Content = row;
+        System.Windows.Automation.AutomationProperties.SetName(ChecksButton, text);
+    }
+
+    private void Checks_Click(object sender, RoutedEventArgs e)
+    {
+        Revalidate();
+        string summary = _checkSummary == "all good" ? "Everything looks good" : _checkSummary;
+        new ChecksWindow(summary, () => _issues) { Owner = this }.ShowDialog();
     }
 
     // ---------------------------------------------------------------- learn an input from the wheel

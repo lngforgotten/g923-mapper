@@ -8,8 +8,9 @@ public static class HealthProbe
 {
     /// <param name="wheelHidden">Whether the wheel is currently hidden by HidHide (cached by the caller; asking HidHide is slow).</param>
     /// <param name="missingExtraDevices">Names of configured extra devices that are not currently plugged in.</param>
+    /// <param name="ignored">Tips the user asked not to see again.</param>
     public static HealthFacts Gather(MapperService service, ProfileStore store, HidHideClient hidHide,
-        bool wheelHidden, IReadOnlyList<string> missingExtraDevices)
+        bool wheelHidden, IReadOnlyList<string> missingExtraDevices, IgnoredTipsFile ignored)
     {
         (bool installed, bool running) = Service("ViGEmBus");
         var snap = service.Latest;
@@ -21,6 +22,7 @@ public static class HealthProbe
             .ToList();
 
         var pads = CachedPads();
+        IgnoredTips tips = ignored.ReadFor(pads);
         int copies = 0;
         for (int n = 1; n <= InstancePlan.MaxInstances; n++)
             if (Mutex.TryOpenExisting($@"Local\G923Mapper.Instance.{n}", out Mutex? m)) { m.Dispose(); copies++; }
@@ -48,7 +50,7 @@ public static class HealthProbe
                                        && CalibrationAnalyzer.IsLopsided(wa.Min, wa.Centre, wa.Max),
             Conflicts = CachedConflicts(store, processes),
             VirtualPadsConnected = pads?.Count(p => p.Connected),
-            VirtualPadsLeftover = pads is null ? null : VirtualPadText.Leftovers(pads).Count,
+            VirtualPadsLeftover = pads is null ? null : tips.Unignored(VirtualPadText.Leftovers(pads).Select(x => x.InstanceId)),
             AppCopiesRunning = Math.Max(1, copies),
             GHubRunning = processes.Contains("lghub") || processes.Contains("lghub_agent"),
             AntiCheatRunning = processes.Contains("beservice"),
@@ -105,6 +107,13 @@ public static class HealthProbe
 
     /// <summary>Forget the cached list so the next health check asks Windows again (after removing leftovers).</summary>
     public static void RefreshVirtualPads() => _padsAt = -1_000_000;
+
+    /// <summary>Use a list that was just read, so the tip is right at once instead of after the next background refresh.</summary>
+    public static void SetVirtualPads(IReadOnlyList<VirtualPadInfo> pads)
+    {
+        _pads = pads;
+        _padsAt = Environment.TickCount64;
+    }
 
     /// <summary>Whether a Windows service exists and is running. A missing service is (false, false).</summary>
     public static (bool installed, bool running) Service(string name)

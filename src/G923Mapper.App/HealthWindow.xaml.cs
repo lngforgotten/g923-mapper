@@ -9,9 +9,13 @@ using System.Windows.Media;
 namespace G923Mapper.App;
 
 public sealed record HealthRow(string Symbol, Brush Brush, string Title, string Detail, string ActionText,
-                               Visibility ActionVisibility, HealthAction Action)
+                               Visibility ActionVisibility, HealthAction Action, IReadOnlyList<string> DeviceIds)
 {
     public override string ToString() => $"{Title}. {Detail}";
+
+    /// <summary>The leftover tip carries its own buttons (remove, ignore, never) under the text instead of the single one at the side.</summary>
+    public Visibility LeftoverVisibility => Action == HealthAction.RemoveLeftovers ? Visibility.Visible : Visibility.Collapsed;
+    public string IgnoreText => DeviceIds.Count == 1 ? "Ignore this one" : $"Ignore these {DeviceIds.Count}";
 }
 
 public partial class HealthWindow : Window
@@ -33,13 +37,16 @@ public partial class HealthWindow : Window
     {
         var svc = _s.Service;
         var missing = svc.IsRunning ? svc.ExtraStatus.Where(x => !x.Connected).Select(x => x.Name).ToList() : new List<string>();
-        var items = HealthEvaluator.Evaluate(HealthProbe.Gather(svc, _s.Store, _s.HidHide, _s.WheelHidden, missing));
+        var items = HealthEvaluator.Evaluate(HealthProbe.Gather(svc, _s.Store, _s.HidHide, _s.WheelHidden, missing, _s.IgnoredTips));
 
         Summary.Text = HealthEvaluator.Summary(items) switch
         {
             "All good" => "Everything looks good",
             var s => s,
         };
+        IgnoredTips tips = _s.IgnoredTips.Read();
+        int ignored = tips.LeftoverIds.Count + (tips.AllLeftovers ? 1 : 0);
+        IgnoredButton.Content = ignored > 0 ? $"Ignored tips ({ignored})…" : "Ignored tips…";
         Rows.ItemsSource = items.Select(i => new HealthRow(
             i.Level switch { HealthLevel.Ok => "✓", HealthLevel.Info => "i", HealthLevel.Warning => "!", _ => "✗" },
             i.Level switch { HealthLevel.Ok => ThemeManager.Success, HealthLevel.Info => ThemeManager.Muted, HealthLevel.Warning => ThemeManager.Warn, _ => ThemeManager.Danger },
@@ -52,8 +59,8 @@ public partial class HealthWindow : Window
                 HealthAction.OpenLogs => "Open log",
                 _ => "",
             },
-            i.Action == HealthAction.None ? Visibility.Collapsed : Visibility.Visible,
-            i.Action)).ToList();
+            i.Action is HealthAction.None or HealthAction.RemoveLeftovers ? Visibility.Collapsed : Visibility.Visible,
+            i.Action, i.DeviceIds ?? [])).ToList();
     }
 
     private void Action_Click(object sender, RoutedEventArgs e)
@@ -74,6 +81,47 @@ public partial class HealthWindow : Window
                 }
                 break;
         }
+    }
+
+    // ---------------------------------------------------------------- the leftover tip
+
+    private async void RemoveLeftovers_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: HealthRow row }) return;
+        Rows.IsEnabled = false;
+        string? outcome = await LeftoverRemoval.ConfirmAndRemove(this, row.DeviceIds, _s.IgnoredTips, () => Say("Waiting for permission…"));
+        Rows.IsEnabled = true;
+        if (outcome is null) return;
+        Say(outcome);
+        Refresh();
+    }
+
+    private void IgnoreLeftovers_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: HealthRow row }) return;
+        Ignore(t => t.Ignore(row.DeviceIds), "Ignored. A new leftover will still be mentioned. Ignored tips can turn this back on.");
+    }
+
+    private void NeverLeftovers_Click(object sender, RoutedEventArgs e) =>
+        Ignore(t => t.AllLeftovers = true, "Leftover controllers will not be mentioned again. Ignored tips can turn this back on.");
+
+    private void Ignore(Action<IgnoredTips> change, string done)
+    {
+        Say(_s.IgnoredTips.Change(change) ? done : "That could not be saved. See the log.");
+        Refresh();
+    }
+
+    private void Ignored_Click(object sender, RoutedEventArgs e)
+    {
+        new IgnoredTipsWindow(_s.IgnoredTips) { Owner = this }.ShowDialog();
+        Say("");
+        Refresh();
+    }
+
+    private void Say(string message)
+    {
+        Message.Text = message;
+        Message.Visibility = message.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private static void Open(string target)
@@ -113,9 +161,10 @@ public partial class HealthWindow : Window
     {
         var svc = _s.Service;
         var missing = svc.IsRunning ? svc.ExtraStatus.Where(x => !x.Connected).Select(x => x.Name).ToList() : new List<string>();
-        var items = HealthEvaluator.Evaluate(HealthProbe.Gather(svc, _s.Store, _s.HidHide, _s.WheelHidden, missing));
+        var items = HealthEvaluator.Evaluate(HealthProbe.Gather(svc, _s.Store, _s.HidHide, _s.WheelHidden, missing, _s.IgnoredTips));
         string[] header =
         [
+            $"Ignored tips: {_s.IgnoredTips.Read().Describe()}",
             $"App: G923 Mapper {typeof(HealthWindow).Assembly.GetName().Version?.ToString(3)} (copy {_s.Instance})",
             $"System: {System.Runtime.InteropServices.RuntimeInformation.OSDescription} · {System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription}",
             $"Mapper: {svc.Status}",

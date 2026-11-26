@@ -85,6 +85,11 @@ public static class ProfileModes
             Spring = mode.Spring ?? profile?.Spring,
             Friction = mode.Friction ?? profile?.Friction,
             Motors = mode.Motors ?? profile?.Motors,
+            CentringStyle = mode.CentringStyle ?? profile?.CentringStyle,
+            CentreDegrees = mode.CentreDegrees ?? profile?.CentreDegrees,
+            PeakDegrees = mode.PeakDegrees ?? profile?.PeakDegrees,
+            LighteningPercent = mode.LighteningPercent ?? profile?.LighteningPercent,
+            DampingPercent = mode.DampingPercent ?? profile?.DampingPercent,
         };
         return f.IsEmpty ? null : f;
     }
@@ -112,6 +117,11 @@ public static class ProfileModes
         if (edited.Force?.Spring != p.Force?.Spring) force.Spring = edited.Force?.Spring;
         if (edited.Force?.Friction != p.Force?.Friction) force.Friction = edited.Force?.Friction;
         if (!string.Equals(edited.Force?.Motors, p.Force?.Motors, StringComparison.OrdinalIgnoreCase)) force.Motors = edited.Force?.Motors;
+        if (!string.Equals(edited.Force?.CentringStyle, p.Force?.CentringStyle, StringComparison.OrdinalIgnoreCase)) force.CentringStyle = edited.Force?.CentringStyle;
+        if (edited.Force?.CentreDegrees != p.Force?.CentreDegrees) force.CentreDegrees = edited.Force?.CentreDegrees;
+        if (edited.Force?.PeakDegrees != p.Force?.PeakDegrees) force.PeakDegrees = edited.Force?.PeakDegrees;
+        if (edited.Force?.LighteningPercent != p.Force?.LighteningPercent) force.LighteningPercent = edited.Force?.LighteningPercent;
+        if (edited.Force?.DampingPercent != p.Force?.DampingPercent) force.DampingPercent = edited.Force?.DampingPercent;
         m.Force = force.IsEmpty ? null : force;
     }
 

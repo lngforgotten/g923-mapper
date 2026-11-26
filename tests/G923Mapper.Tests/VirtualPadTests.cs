@@ -92,7 +92,9 @@ public class VirtualPadHealthTests
         HealthEvaluator.Evaluate(new HealthFacts
         {
             ViGEmInstalled = true, ViGEmRunning = true, MapperRunning = true, WheelFound = true, WheelReporting = true,
-            VirtualPadsConnected = connected, AppCopiesRunning = copies, VirtualPadsLeftover = leftover,
+            VirtualPadsConnected = connected, AppCopiesRunning = copies,
+            VirtualPadsLeftover = leftover is int n ? Enumerable.Range(2, n).Select(i => $@"USB\VID_045E&PID_028E\{i:00}").ToList() : null,
+
         });
 
     [Fact]

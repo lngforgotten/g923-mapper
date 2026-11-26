@@ -3,9 +3,11 @@ namespace G923Mapper;
 public enum HealthLevel { Ok = 0, Info = 1, Warning = 2, Problem = 3 }
 
 /// <summary>What the UI can offer to do about a finding.</summary>
-public enum HealthAction { None, GetViGEmBus, GetHidHide, OpenSettings, OpenLogs }
+public enum HealthAction { None, GetViGEmBus, GetHidHide, OpenSettings, OpenLogs, RemoveLeftovers }
 
-public sealed record HealthItem(string Title, HealthLevel Level, string Detail, HealthAction Action = HealthAction.None);
+/// <param name="DeviceIds">For <see cref="HealthAction.RemoveLeftovers"/>: the entries the finding is about.</param>
+public sealed record HealthItem(string Title, HealthLevel Level, string Detail, HealthAction Action = HealthAction.None,
+                                IReadOnlyList<string>? DeviceIds = null);
 
 /// <summary>Everything the health check looks at, gathered by the caller so the rules below stay pure.</summary>
 public sealed class HealthFacts
@@ -38,8 +40,8 @@ public sealed class HealthFacts
     public int? VirtualPadsConnected { get; init; }
     /// <summary>How many copies of this app are running (each makes one virtual controller).</summary>
     public int AppCopiesRunning { get; init; } = 1;
-    /// <summary>Entries left behind in Device Manager by earlier sessions, or null if unknown.</summary>
-    public int? VirtualPadsLeftover { get; init; }
+    /// <summary>Instance ids of the entries left behind in Device Manager by earlier sessions that the user has not ignored, or null if unknown.</summary>
+    public IReadOnlyList<string>? VirtualPadsLeftover { get; init; }
 
     public bool GHubRunning { get; init; }
     public bool AntiCheatRunning { get; init; }
@@ -100,10 +102,11 @@ public static class HealthEvaluator
                 $"{connected} virtual Xbox 360 controllers are connected but this app only makes {Math.Max(1, f.AppCopiesRunning)}. " +
                 "Another program such as x360ce or DS4Windows may be making one too, so a game can see double input. Close it, or see the list in Settings.",
                 HealthAction.OpenSettings));
-        if (f.VirtualPadsLeftover is int leftover and > 0)
-            items.Add(new(leftover == 1 ? "A leftover virtual controller" : $"{leftover} leftover virtual controllers", HealthLevel.Info,
-                "Earlier sessions left unplugged controller entries in Device Manager. They are harmless but can confuse some games. Settings has a button to remove them.",
-                HealthAction.OpenSettings));
+        if (f.VirtualPadsLeftover is { Count: > 0 } leftovers)
+            items.Add(new(leftovers.Count == 1 ? "A leftover virtual controller" : $"{leftovers.Count} leftover virtual controllers", HealthLevel.Info,
+                "Earlier sessions left unplugged controller entries in Device Manager. They are harmless but can confuse some games. " +
+                "Remove them here (Windows asks for administrator permission), or ignore them.",
+                HealthAction.RemoveLeftovers, leftovers));
 
         // Calibration that was recorded without reaching a stop makes one side of the wheel far more sensitive.
         if (f.WheelCalibrationLopsided)

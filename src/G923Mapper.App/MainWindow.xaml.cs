@@ -399,7 +399,7 @@ public partial class MainWindow : Window
     private void UpdateHealth()
     {
         var missing = Service.IsRunning ? Service.ExtraStatus.Where(x => !x.Connected).Select(x => x.Name).ToList() : new List<string>();
-        var items = HealthEvaluator.Evaluate(HealthProbe.Gather(Service, Store, _s.HidHide, _s.WheelHidden, missing));
+        var items = HealthEvaluator.Evaluate(HealthProbe.Gather(Service, Store, _s.HidHide, _s.WheelHidden, missing, _s.IgnoredTips));
         HealthLevel level = HealthEvaluator.Overall(items);
         Brush colour = level switch { HealthLevel.Problem => Red, HealthLevel.Warning => Amber, HealthLevel.Info => ThemeManager.Muted, _ => Green };
 
