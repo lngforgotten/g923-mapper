@@ -102,8 +102,27 @@ public partial class SettingsWindow : Window
     }
 
     /// <summary>Things that change while the window is open.</summary>
+    private bool _showedDownload;
+
+    /// <summary>The same progress line as Home, whether the download was started here, there or by the app itself.</summary>
+    private void RefreshDownload()
+    {
+        if (_s.UpdatePhase == UpdatePhase.Downloading)
+        {
+            _showedDownload = true;
+            UpdateMessage.Text = $"Downloading the new version… {_s.DownloadText}";
+        }
+        else if (_showedDownload)
+        {
+            _showedDownload = false;
+            UpdateMessage.Text = _s.UpdatePhase == UpdatePhase.Failed ? "It could not be installed: " + _s.UpdateProblem
+                : _s.UpdatePhase == UpdatePhase.Ready ? "The new version is downloaded and ready." : "";
+        }
+    }
+
     private void RefreshLive()
     {
+        RefreshDownload();
         var svc = _s.Service;
         WheelText.Text = svc.State == MapperState.Running
             ? $"{svc.WheelName}  ({svc.WheelIds})"
@@ -409,7 +428,8 @@ public partial class SettingsWindow : Window
         {
             var (info, problem) = await UpdateChecker.CheckAsync(UpdateRepoBox.Text);
             if (info is null) { UpdateMessage.Text = problem ?? ""; return; }
-            UpdateMessage.Text = info.Message;
+            long size = info.Newer ? UpdateInstaller.DownloadSize(info, UpdateRepoBox.Text) : 0;
+            UpdateMessage.Text = size > 0 ? $"{info.Message} {DownloadMeter.Size(size)} to download." : info.Message;
             _updateUrl = info.Url;
             UpdateOpenButton.Visibility = UpdateInstallButton.Visibility = info.Newer ? Visibility.Visible : Visibility.Collapsed;
             AppLog.Info("Update check: " + info.Message);

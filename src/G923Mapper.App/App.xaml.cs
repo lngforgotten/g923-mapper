@@ -391,10 +391,18 @@ public partial class App : Application
             return;
         }
 
-        s.UpdatePhase = UpdatePhase.Downloading; s.UpdatePercent = 0; s.UpdateProblem = "";
+        s.UpdatePhase = UpdatePhase.Downloading; s.UpdateProblem = "";
+        s.Download.Start(AppServices.Clock, UpdateInstaller.DownloadSize(info, s.Settings.UpdateRepo));
         UpdateUi();
-        var progress = new Progress<int>(p => { s.UpdatePercent = p; UpdateUi(); });
-        var (staged, message) = await UpdateInstaller.StageAsync(info, s.Settings.UpdateRepo, progress);
+        var progress = new Progress<(long Done, long Total)>(p => { s.Download.Report(AppServices.Clock, p.Done, p.Total); UpdateUi(); });
+        // A stalled download reports nothing, so the screen is also refreshed by the clock: that is when it must say it is waiting.
+        var tick = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+        tick.Tick += (_, _) => UpdateUi();
+        tick.Start();
+        StagedUpdate? staged;
+        string message;
+        try { (staged, message) = await UpdateInstaller.StageAsync(info, s.Settings.UpdateRepo, progress); }
+        finally { tick.Stop(); }
         if (staged is null)
         {
             s.UpdatePhase = UpdatePhase.Failed; s.UpdateProblem = message;

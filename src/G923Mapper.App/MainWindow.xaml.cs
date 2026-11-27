@@ -235,7 +235,7 @@ public partial class MainWindow : Window
         switch (phase)
         {
             case UpdatePhase.Downloading:
-                UpdateText.Text = $"Downloading version {tag}… {_s.UpdatePercent}%";
+                UpdateText.Text = $"Downloading version {tag}… {_s.DownloadText}";
                 UpdateActionButton.Visibility = UpdateNotesButton.Visibility = UpdateLaterButton.Visibility = Visibility.Collapsed;
                 break;
             case UpdatePhase.Ready:
@@ -251,7 +251,8 @@ public partial class MainWindow : Window
                 UpdateActionButton.Visibility = UpdateNotesButton.Visibility = UpdateLaterButton.Visibility = Visibility.Visible;
                 break;
             default:
-                UpdateText.Text = $"Version {tag} is available.";
+                long size = UpdateInstaller.DownloadSize(info, Settings.UpdateRepo);
+                UpdateText.Text = size > 0 ? $"Version {tag} is available ({DownloadMeter.Size(size)} to download)." : $"Version {tag} is available.";
                 UpdateActionButton.Content = "Install now";
                 UpdateActionButton.ToolTip = "Download it, then restart into the new version.";
                 UpdateActionButton.Visibility = UpdateNotesButton.Visibility = UpdateLaterButton.Visibility = Visibility.Visible;

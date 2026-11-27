@@ -35,7 +35,10 @@ public sealed class AppServices
     public UpdatePhase UpdatePhase { get; set; }
     /// <summary>The version the app has just updated itself to (set for the first run of the new copy), so Home can say so; empty otherwise.</summary>
     public string JustUpdatedTag { get; set; } = "";
-    public int UpdatePercent { get; set; }
+    /// <summary>How the update's download is going; <see cref="DownloadText"/> is it in words.</summary>
+    public DownloadMeter Download { get; } = new();
+    public static TimeSpan Clock => TimeSpan.FromMilliseconds(Environment.TickCount64);
+    public string DownloadText => Download.Describe(Clock);
     public string UpdateProblem { get; set; } = "";
     /// <summary>Download the new version now and restart into it (the "Install now" button).</summary>
     public Func<System.Threading.Tasks.Task>? InstallUpdateNow { get; set; }

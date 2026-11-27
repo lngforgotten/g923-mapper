@@ -117,7 +117,14 @@ internal static class UpdateInstaller
         return exe is not null && System.IO.File.Exists(exe) && UpdatePackage.LooksSelfContained(new System.IO.FileInfo(exe).Length);
     }
 
-    public static async Task<(StagedUpdate? Staged, string Message)> StageAsync(UpdateInfo info, string? repoText, IProgress<int>? progress, System.Threading.CancellationToken ct = default)
+    /// <summary>The size of what this copy would download for that release, or 0 when it is not known.</summary>
+    public static long DownloadSize(UpdateInfo info, string? repoText)
+    {
+        string? repo = UpdateCheck.NormaliseRepo(UpdateCheck.RepoOrDefault(repoText));
+        return repo is null ? 0 : UpdatePackage.Choose(info.Assets ?? [], IsFullBuild(), repo)?.Size ?? 0;
+    }
+
+    public static async Task<(StagedUpdate? Staged, string Message)> StageAsync(UpdateInfo info, string? repoText, IProgress<(long Done, long Total)>? progress, System.Threading.CancellationToken ct = default)
     {
         string? repo = UpdateCheck.NormaliseRepo(UpdateCheck.RepoOrDefault(repoText));
         if (repo is null) return (null, "The update repository is not a valid GitHub address.");
@@ -145,15 +152,16 @@ internal static class UpdateInstaller
                 await using var source = await response.Content.ReadAsStreamAsync(timeout.Token);
                 await using var target = System.IO.File.Create(zip);
                 var buffer = new byte[81920];
-                long done = 0; int lastPercent = -1;
+                long done = 0, lastReport = 0;
                 int read;
                 while ((read = await source.ReadAsync(buffer, timeout.Token)) > 0)
                 {
                     await target.WriteAsync(buffer.AsMemory(0, read), timeout.Token);
                     done += read;
-                    int percent = total > 0 ? (int)Math.Min(99, done * 100 / total) : 0;
-                    if (percent != lastPercent) { lastPercent = percent; progress?.Report(percent); }
+                    // By time, not by percent: on a slow line one percent can be many seconds apart.
+                    if (Environment.TickCount64 - lastReport >= 250) { lastReport = Environment.TickCount64; progress?.Report((done, total)); }
                 }
+                progress?.Report((done, total));
             }
 
             switch (UpdatePackage.CheckDigest(zip, asset.Sha256))
@@ -175,7 +183,6 @@ internal static class UpdateInstaller
             }
             UpdatePackage.WriteStaged(AppSettings.StagedDir, info.LatestTag, version, exe);
             try { System.IO.Directory.Delete(downloadDir, recursive: true); } catch (Exception ex) when (ex is System.IO.IOException or UnauthorizedAccessException) { }
-            progress?.Report(100);
             return (UpdatePackage.ReadStaged(AppSettings.StagedDir), "");
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.IO.IOException or UnauthorizedAccessException)
