@@ -115,6 +115,14 @@ public sealed class Rule
     public bool Turbo { get; set; }
     /// <summary>Presses per second for turbo.</summary>
     public double TurboHz { get; set; } = 10;
+
+    /// <summary>A separate copy with every setting, including any added later.</summary>
+    public Rule Clone()
+    {
+        var copy = (Rule)MemberwiseClone();
+        copy.Points = Points?.Select(p => (double[])p.Clone()).ToArray();   // the one setting that would otherwise be shared
+        return copy;
+    }
 }
 
 public sealed class Profile

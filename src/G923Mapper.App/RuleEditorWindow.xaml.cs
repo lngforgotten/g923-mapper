@@ -1221,15 +1221,7 @@ public partial class RuleEditorWindow : Window
     private void Duplicate_Click(object sender, RoutedEventArgs e)
     {
         if (Current is null) return;
-        Rule s = Current.Rule;
-        var copy = new Rule
-        {
-            From = s.From, To = s.To, Curve = s.Curve, Exponent = s.Exponent,
-            Points = s.Points?.Select(p => (double[])p.Clone()).ToArray(),
-            Deadzone = s.Deadzone, AntiDeadzone = s.AntiDeadzone, Invert = s.Invert,
-            Threshold = s.Threshold, Mode = s.Mode, PulseMs = s.PulseMs, Range = s.Range,
-        };
-        var row = new RuleRow(copy);
+        var row = new RuleRow(Current.Rule.Clone());
         Rows.Insert(RuleList.SelectedIndex + 1, row);
         RuleList.SelectedItem = row;
         Revalidate();
