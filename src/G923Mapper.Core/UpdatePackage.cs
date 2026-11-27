@@ -210,6 +210,18 @@ public static class UpdatePackage
 
     // ---------------------------------------------------------------- swapping it in
 
+    /// <summary>
+    /// The arguments for the copy started after "Restart now" or "Install now". It comes back the way it was just being used: with its window if
+    /// that was showing, in the tray if not. Passing on the old ones as they were would hide a window the person was looking at, because a copy
+    /// started with Windows was started "--minimized".
+    /// </summary>
+    public static IReadOnlyList<string> RestartArguments(IEnumerable<string> current, bool windowShowing)
+    {
+        var args = current.Where(a => !a.Equals("--minimized", StringComparison.OrdinalIgnoreCase)).ToList();
+        if (!windowShowing) args.Add("--minimized");
+        return args;
+    }
+
     /// <summary>Only a copy installed where the installer puts it is ever replaced, never a build someone is running from a folder.</summary>
     public static bool IsInstalledCopy(string? exePath, string installDir)
     {

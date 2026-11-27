@@ -443,7 +443,7 @@ public partial class App : Application
             return;
         }
         FinishSwap(staged);
-        LaunchLater(exe, Environment.GetCommandLineArgs().Skip(1));
+        LaunchLater(exe, UpdatePackage.RestartArguments(Environment.GetCommandLineArgs().Skip(1), _window?.IsVisible == true));
         ExitApp();
     }
 
